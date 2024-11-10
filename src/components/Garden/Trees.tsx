@@ -1,180 +1,165 @@
 import React, { useMemo, useRef } from 'react';
-import { useFrame } from '@react-three/fiber';
-import * as THREE from 'three';
-import { Vector3, MeshPhysicalMaterial } from 'three';
+import { extend, useFrame } from '@react-three/fiber';
 import { createNoise2D } from 'simplex-noise';
+import { ShaderMaterial } from 'three';
+import * as THREE from 'three';
 
-interface TreeProps {
-  position: [number, number, number];
-  scale?: number;
-  growthProgress?: number;
-  type?: 'normal' | 'sacred' | 'abstract';
+extend({ ShaderMaterial });
+
+interface TreesProps {
+  count?: number;
+  environmentalFactors: {
+    light?: number;
+    energy?: number;
+    flow?: number;
+  };
 }
 
-// Create noise function for organic movement
 const noise2D = createNoise2D();
 
-const Tree: React.FC<TreeProps> = ({ 
-  position, 
-  scale = 1, 
-  growthProgress = 1,
-  type = 'normal' 
-}) => {
-  const treeRef = useRef<THREE.Group>(null);
-  const materialRef = useRef<MeshPhysicalMaterial>(null);
-  
-  // Generate tree shape based on type
-  const geometry = useMemo(() => {
-    switch(type) {
-      case 'sacred':
-        return generateSacredGeometry();
-      case 'abstract':
-        return generateAbstractGeometry();
-      default:
-        return generateNaturalGeometry();
-    }
-  }, [type]);
+const Tree: React.FC<{ 
+  position: [number, number, number],
+  scale: number,
+  type: 'normal' | 'tall' | 'round',
+  energy: number
+}> = ({ position, scale, type, energy }) => {
+  const groupRef = useRef<THREE.Group>();
+  const initialRotation = useMemo(() => Math.random() * Math.PI * 2, []);
 
-  // Animate tree growth and movement
+  // Create tree material
+  const material = useMemo(() => {
+    return new ShaderMaterial({
+      uniforms: {
+        time: { value: 0 },
+        energy: { value: energy },
+        baseColor: { value: new THREE.Vector3(0.2, 0.3, 0.15) }
+      },
+      vertexShader: `
+        uniform float time;
+        uniform float energy;
+        
+        varying vec2 vUv;
+        varying vec3 vNormal;
+        
+        void main() {
+          vUv = uv;
+          vNormal = normal;
+          
+          // Add gentle swaying motion
+          vec3 pos = position;
+          float swayAmount = pos.y * 0.1;
+          pos.x += sin(time + position.y) * swayAmount * energy;
+          
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform float time;
+        uniform float energy;
+        uniform vec3 baseColor;
+        
+        varying vec2 vUv;
+        varying vec3 vNormal;
+        
+        void main() {
+          // Create color variation based on height and normal
+          vec3 color = baseColor;
+          color += vUv.y * 0.1;  // Lighten towards top
+          
+          // Add energy-based glow
+          float glow = sin(time * 2.0) * 0.5 + 0.5;
+          color += vec3(0.1, 0.2, 0.1) * energy * glow;
+          
+          // Simple lighting
+          float light = dot(vNormal, normalize(vec3(1.0, 1.0, 1.0))) * 0.5 + 0.5;
+          color *= 0.8 + light * 0.2;
+          
+          gl_FragColor = vec4(color, 1.0);
+        }
+      `
+    });
+  }, [energy]);
+
+  // Animate tree
   useFrame((state) => {
-    if (!treeRef.current) return;
-
+    if (!groupRef.current) return;
+    
     const time = state.clock.getElapsedTime();
+    material.uniforms.time.value = time;
     
-    // Gentle swaying motion
-    const windEffect = Math.sin(time + position[0]) * 0.02;
-    treeRef.current.rotation.z = windEffect;
-    
-    // Growth animation
-    const currentScale = Math.min(scale * growthProgress, scale);
-    treeRef.current.scale.setScalar(currentScale);
-    
-    // Organic movement based on noise
-    const noiseValue = noise2D(time * 0.1, position[0] * 0.1);
-    treeRef.current.position.y = position[1] + noiseValue * 0.1;
-
-    // Update material properties
-    if (materialRef.current) {
-      materialRef.current.transmission = 0.2 + Math.sin(time) * 0.1;
-      materialRef.current.emissiveIntensity = 0.1 + Math.sin(time * 0.5) * 0.05;
-    }
+    // Add subtle rotation
+    groupRef.current.rotation.y = initialRotation + Math.sin(time * 0.5) * 0.02;
   });
 
+  // Generate tree geometry based on type
+  const geometry = useMemo(() => {
+    switch (type) {
+      case 'tall':
+        return new THREE.CylinderGeometry(0.2 * scale, 0.3 * scale, 4 * scale, 8);
+      case 'round':
+        return new THREE.SphereGeometry(scale, 8, 8);
+      default:
+        return new THREE.ConeGeometry(scale, scale * 2, 8);
+    }
+  }, [type, scale]);
+
   return (
-    <group ref={treeRef} position={position}>
-      {/* Base/Trunk */}
-      <mesh castShadow receiveShadow>
-        <cylinderGeometry 
-          args={[0.2 * scale, 0.3 * scale, 2 * scale, 8]} 
-        />
-        <meshPhysicalMaterial
-          ref={materialRef}
-          color="#2a1810"
-          roughness={0.8}
-          metalness={0.1}
-          clearcoat={0.5}
-        />
+    <group ref={groupRef} position={position}>
+      {/* Tree trunk */}
+      <mesh castShadow>
+        <cylinderGeometry args={[0.1 * scale, 0.15 * scale, scale, 6]} />
+        <meshStandardMaterial color="#3d2817" />
       </mesh>
 
-      {/* Main Foliage */}
-      <group position={[0, 2 * scale, 0]}>
-        {Array.from({ length: 3 }).map((_, i) => (
-          <mesh 
-            key={i} 
-            position={[0, i * 0.7 * scale, 0]} 
-            castShadow
-          >
-            <coneGeometry 
-              args={[
-                (1.5 - i * 0.3) * scale, 
-                2 * scale, 
-                8
-              ]} 
-            />
-            <meshPhysicalMaterial
-              color={`hsl(${120 + i * 10}, 60%, ${30 + i * 5}%)`}
-              roughness={0.7}
-              metalness={0.1}
-              clearcoat={0.3}
-              transmission={0.1}
-            />
-          </mesh>
-        ))}
-      </group>
-
-      {/* Energy flow particles */}
-      <group position={[0, 1 * scale, 0]}>
-        {Array.from({ length: 5 }).map((_, i) => (
-          <mesh 
-            key={i}
-            position={[
-              Math.sin(i / 5 * Math.PI * 2) * 0.5,
-              i * 0.5,
-              Math.cos(i / 5 * Math.PI * 2) * 0.5
-            ]}
-          >
-            <sphereGeometry args={[0.05 * scale, 8, 8]} />
-            <meshBasicMaterial 
-              color="#88ff88" 
-              transparent 
-              opacity={0.5} 
-            />
-          </mesh>
-        ))}
-      </group>
+      {/* Tree foliage */}
+      <mesh position={[0, scale * 1.2, 0]} castShadow>
+        <primitive object={geometry} />
+        <primitive object={material} />
+      </mesh>
     </group>
   );
 };
 
-const Trees: React.FC = () => {
-  // Generate more interesting tree positions
-  const treePositions = useMemo(() => {
+const Trees: React.FC<TreesProps> = ({ 
+  count = 10,
+  environmentalFactors 
+}) => {
+  // Generate tree positions
+  const trees = useMemo(() => {
     const positions: Array<{
-      pos: [number, number, number];
+      position: [number, number, number];
       scale: number;
-      type: 'normal' | 'sacred' | 'abstract';
+      type: 'normal' | 'tall' | 'round';
     }> = [];
 
-    // Create clusters
-    for (let cluster = 0; cluster < 3; cluster++) {
-      const clusterCenter = new Vector3(
-        (Math.random() - 0.5) * 20,
-        0,
-        (Math.random() - 0.5) * 20
-      );
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2;
+      const radius = 5 + Math.random() * 5;
+      const x = Math.cos(angle) * radius;
+      const z = Math.sin(angle) * radius;
+      
+      // Add some randomness to position
+      const jitter = 2;
+      const jx = (Math.random() - 0.5) * jitter;
+      const jz = (Math.random() - 0.5) * jitter;
 
-      const treeCount = 5 + Math.floor(Math.random() * 5);
-      const type = ['normal', 'sacred', 'abstract'][cluster] as 'normal' | 'sacred' | 'abstract';
-
-      for (let i = 0; i < treeCount; i++) {
-        const angle = (i / treeCount) * Math.PI * 2;
-        const radius = 2 + Math.random() * 3;
-        const position = new Vector3(
-          Math.cos(angle) * radius,
-          0,
-          Math.sin(angle) * radius
-        ).add(clusterCenter);
-
-        positions.push({
-          pos: [position.x, position.y, position.z],
-          scale: 0.5 + Math.random() * 1,
-          type
-        });
-      }
+      positions.push({
+        position: [x + jx, 0, z + jz],
+        scale: 0.5 + Math.random() * 1,
+        type: ['normal', 'tall', 'round'][Math.floor(Math.random() * 3)] as 'normal' | 'tall' | 'round'
+      });
     }
 
     return positions;
-  }, []);
+  }, [count]);
 
   return (
     <group>
-      {treePositions.map((tree, index) => (
-        <Tree 
-          key={index} 
-          position={tree.pos}
-          scale={tree.scale}
-          type={tree.type}
-          growthProgress={Math.random()} // Random initial growth state
+      {trees.map((tree, index) => (
+        <Tree
+          key={index}
+          {...tree}
+          energy={environmentalFactors.energy || 0.5}
         />
       ))}
     </group>
@@ -182,19 +167,3 @@ const Trees: React.FC = () => {
 };
 
 export default Trees;
-
-// Helper function to generate different tree geometries
-const generateNaturalGeometry = () => {
-  // Implementation for natural tree geometry
-  return new THREE.ConeGeometry(1, 2, 8);
-};
-
-const generateSacredGeometry = () => {
-  // Implementation for sacred geometry inspired tree
-  return new THREE.ConeGeometry(1, 2, 6); // Hexagonal base
-};
-
-const generateAbstractGeometry = () => {
-  // Implementation for abstract tree form
-  return new THREE.IcosahedronGeometry(1, 0);
-};

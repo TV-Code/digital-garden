@@ -1,9 +1,14 @@
-import React from 'react';
 import Garden from './components/Garden/Garden';
 
 function App() {
   return (
-    <div className="fixed inset-0 w-screen h-screen overflow-hidden bg-black">
+    <div style={{ 
+      width: '100vw', 
+      height: '100vh', 
+      margin: 0, 
+      padding: 0, 
+      overflow: 'hidden' 
+    }}>
       <Garden />
     </div>
   );

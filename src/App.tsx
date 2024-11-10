@@ -1,4 +1,4 @@
-import Garden from './components/Garden/Garden';
+import { Scene } from "./components/Sanctuary/Scene";
 
 function App() {
   return (
@@ -9,7 +9,7 @@ function App() {
       padding: 0, 
       overflow: 'hidden' 
     }}>
-      <Garden />
+      <Scene />
     </div>
   );
 }

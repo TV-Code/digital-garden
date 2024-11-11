@@ -28,9 +28,21 @@ export const ColorSystem = {
   },
   landscape: {
     mountains: [
-      { base: [225, 40, 40], highlight: [15, 30, 90], shadow: [235, 45, 25] },
-      { base: [220, 45, 35], highlight: [15, 35, 85], shadow: [230, 50, 20] },
-      { base: [215, 50, 30], highlight: [15, 40, 80], shadow: [225, 55, 15] }
+      {
+        base: [220, 45, 45],    // Deeper blue base
+        highlight: [35, 80, 85], // Warm highlights
+        shadow: [225, 50, 30]    // Dark blue shadows
+      },
+      {
+        base: [215, 40, 40],
+        highlight: [30, 75, 80],
+        shadow: [220, 45, 25]
+      },
+      {
+        base: [210, 35, 35],
+        highlight: [25, 70, 75],
+        shadow: [215, 40, 20]
+      }
     ],
     terrain: {
       rock: { light: [25, 30, 75], dark: [220, 25, 35] },

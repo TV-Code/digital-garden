@@ -70,17 +70,17 @@ export class WaterSystem {
     // 1. Draw base water with gradient
     this.drawBaseWater(ctx);
 
-    // // 2. Apply underwater caustics
-    // this.drawCaustics(ctx, time);
+    // 2. Apply underwater caustics
+    this.drawCaustics(ctx, time);
 
     // // 3. Draw reflections
     // this.drawReflections(ctx, time, scene);
 
-    // // 4. Draw surface details
-    // this.drawSurfaceDetails(ctx, time);
+    // 4. Draw surface details
+    this.drawSurfaceDetails(ctx, time);
 
-    // // 5. Draw ripples and waves
-    // this.updateAndDrawRipples(ctx, time);
+    // 5. Draw ripples and waves
+    this.updateAndDrawRipples(ctx, time);
   }
 
   private drawBaseWater(ctx: CanvasRenderingContext2D) {

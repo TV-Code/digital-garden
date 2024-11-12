@@ -57,6 +57,7 @@ export class TerrainSystem {
     private noise3D: ReturnType<typeof createNoise3D>;
     private erosionProgress: number = 0;
     private vegetationSystem: VegetationSystem;
+    
   
     constructor(
       private width: number, 
@@ -93,36 +94,44 @@ export class TerrainSystem {
     }
   
     
-draw(ctx: CanvasRenderingContext2D, time: number, lighting: any) {
-    ctx.save();
-    // Draw each terrain feature
-    this.features.forEach(feature => {
+    draw(ctx: CanvasRenderingContext2D, time: number, lighting: any) {
         
         
-        // Draw main feature shape
-        const gradient = this.createTerrainGradient(ctx, feature, lighting);
-        ctx.fillStyle = gradient;
-        ctx.fill(feature.path);
+        // Sort features by y position to ensure correct layering
+        const sortedFeatures = [...this.features].sort((a, b) => b.position.y - a.position.y);
         
-        // Draw rock formations
-        feature.detail.rockFormations.forEach(rock => {
-            this.drawRockFormation(ctx, rock, time, lighting);
+        // Draw each terrain feature
+        sortedFeatures.forEach(feature => {
+            ctx.save();
+            
+            // Draw main feature shape
+            const gradient = this.createTerrainGradient(ctx, feature, lighting);
+            ctx.fillStyle = gradient;
+            ctx.fill(feature.path);
+            
+            // Only draw rock formations on cliffs and with reduced frequency
+            if (feature.type === 'cliff') {
+                feature.detail.rockFormations.forEach(rock => {
+                    // Reduce rock contrast
+                    ctx.globalAlpha = 0.4;
+                    this.drawRockFormation(ctx, rock, time, lighting);
+                });
+            }
+            
+            // Draw erosion with reduced opacity
+            feature.detail.erosion.forEach(erosion => {
+                ctx.globalAlpha = 0.1;
+                this.drawErosionPattern(ctx, erosion, time);
+            });
+            
+            ctx.restore();
         });
         
-        // Draw erosion patterns
-        feature.detail.erosion.forEach(erosion => {
-            ctx.globalAlpha = 0.3;
-            this.drawErosionPattern(ctx, erosion, time);
-        });
-
-        // Draw vegetation
+        // Draw vegetation last and with full opacity
         ctx.globalAlpha = 1;
         this.vegetationSystem.draw(ctx, time);
         
-        
-    });
-    ctx.restore();
-}
+    }
 
 // Add missing erosion pattern drawing method
 private drawErosionPattern(ctx: CanvasRenderingContext2D, erosion: ErosionDetail, time: number) {
@@ -208,53 +217,55 @@ private generateErosionPatterns(feature: TerrainFeature): ErosionDetail[] {
     }
 
     private generateLandforms() {
-        // Generate height map with better constraints
-        const heightmap = this.generateHeightmap();
-        const features: TerrainFeature[] = [];
+        // Create dramatic mountain ranges on sides
+        const leftMountain = this.createMountainFeature(0, this.width * 0.4, 'left');
+        const rightMountain = this.createMountainFeature(this.width * 0.6, this.width, 'right');
         
-        // Create main shoreline features
-        const leftShore = this.createShorelineFeature(0, this.width * 0.4, 'left');
-        const rightShore = this.createShorelineFeature(this.width * 0.6, this.width, 'right');
+        // Create gentler slopes near water for vegetation
+        const leftShore = this.createShorelineFeature(this.width * 0.2, this.width * 0.4);
+        const rightShore = this.createShorelineFeature(this.width * 0.6, this.width * 0.8);
         
-        features.push(leftShore, rightShore);
+        this.features = [leftMountain, rightMountain, leftShore, rightShore];
         
-        // Add additional terrain features
-        features.forEach(feature => {
-            this.addNaturalVariation(feature);
+        // Add detail and notify vegetation system
+        this.features.forEach(feature => {
             feature.detail = {
                 rockFormations: this.generateRockFormations(feature),
                 vegetation: [],
                 erosion: this.generateErosionPatterns(feature)
             };
+            
+            if (feature.type === 'slope') {
+                this.notifyVegetationSystem(feature);
+            }
         });
-        
-        this.features = features;
     }
-
-    private createShorelineFeature(startX: number, endX: number, side: 'left' | 'right'): TerrainFeature {
+    
+    
+    private createShorelineFeature(startX: number, endX: number): TerrainFeature {
         const points: Vector2[] = [];
-        const segments = 30;
+        const segments = 20;
         
-        // Generate shoreline points
+        // Generate gentle shoreline
         for (let i = 0; i <= segments; i++) {
             const t = i / segments;
             const x = startX + (endX - startX) * t;
-            const baseY = this.waterLevel;
             
-            // Add height variation
-            const heightVariation = this.noise2D(x * 0.005, side === 'left' ? 0 : 1) * 50;
-            const y = baseY + heightVariation + 20; // Ensure it's below water
+            // Create subtle variations for natural look
+            const variationScale = 0.01;
+            const variation = this.noise2D(x * variationScale, 0) * 20;
             
+            const y = this.waterLevel + variation;
             points.push({ x, y });
         }
         
-        // Add bottom points to close the shape
-        points.push({ x: endX, y: this.height });
-        points.push({ x: startX, y: this.height });
+        // Add slope points
+        const slopePoints = this.generateGentleSlope(points);
+        points.push(...slopePoints);
         
         return {
             path: this.createSmoothPath(points),
-            points: points,
+            points,
             type: 'slope',
             position: this.calculateCentroid(points),
             size: this.calculateFeatureSize(points),
@@ -266,26 +277,184 @@ private generateErosionPatterns(feature: TerrainFeature): ErosionDetail[] {
         };
     }
     
+    private generateGentleSlope(shorePoints: Vector2[]): Vector2[] {
+        const slopePoints: Vector2[] = [];
+        const slopeHeight = (this.height - this.waterLevel) * 0.3; // Shorter, gentler slopes
+        
+        shorePoints.forEach(point => {
+            // Create a natural slope curve
+            const steps = 4;
+            for (let i = 1; i <= steps; i++) {
+                const t = i / steps;
+                // Use easing function for natural curve
+                const ease = t * t * (3 - 2 * t);
+                
+                const slopePoint = {
+                    x: point.x + this.noise2D(point.x * 0.02, t) * 10,
+                    y: point.y + slopeHeight * ease
+                };
+                
+                slopePoints.push(slopePoint);
+            }
+        });
+        
+        return slopePoints;
+    }
+    
+    private createTerrainGradient(
+        ctx: CanvasRenderingContext2D,
+        feature: TerrainFeature,
+        lighting: any
+    ): CanvasGradient {
+        const gradient = ctx.createLinearGradient(
+            feature.position.x,
+            feature.position.y - feature.size,
+            feature.position.x,
+            feature.position.y + feature.size
+        );
+        
+        // Adjust colors for more dramatic look
+        const baseColor = this.getRockColor(feature.type);
+        if (feature.type === 'cliff') {
+            // More dramatic mountain colors
+            gradient.addColorStop(0, `hsla(${baseColor.h}, ${baseColor.s}%, ${baseColor.b + 25}%, 1)`);
+            gradient.addColorStop(0.4, `hsla(${baseColor.h}, ${baseColor.s}%, ${baseColor.b}%, 1)`);
+            gradient.addColorStop(1, `hsla(${baseColor.h}, ${baseColor.s}%, ${Math.max(0, baseColor.b - 20)}%, 1)`);
+        } else {
+            // Softer colors for slopes
+            gradient.addColorStop(0, `hsla(${baseColor.h}, ${baseColor.s - 10}%, ${baseColor.b + 15}%, 1)`);
+            gradient.addColorStop(0.5, `hsla(${baseColor.h}, ${baseColor.s - 5}%, ${baseColor.b}%, 1)`);
+            gradient.addColorStop(1, `hsla(${baseColor.h}, ${baseColor.s}%, ${baseColor.b - 10}%, 1)`);
+        }
+        
+        return gradient;
+    }
+    
+    private generateSlopePoints(shorePoints: Vector2[], side: 'left' | 'right'): Vector2[] {
+        const slopePoints: Vector2[] = [];
+        const slopeHeight = this.height - this.waterLevel;
+        
+        shorePoints.forEach(point => {
+            // Create multiple points down the slope for better terrain definition
+            const steps = 3;
+            for (let i = 1; i <= steps; i++) {
+                const t = i / steps;
+                const slopeNoise = this.noise2D(point.x * 0.02, t) * 30;
+                
+                // Calculate slope point with natural variation
+                const slopePoint = {
+                    x: point.x + (side === 'left' ? -1 : 1) * slopeNoise,
+                    y: point.y + slopeHeight * t
+                };
+                
+                slopePoints.push(slopePoint);
+            }
+        });
+        
+        return slopePoints;
+    }
+    
+    private createValleyFeatures(): TerrainFeature[] {
+        const features: TerrainFeature[] = [];
+        const valleyWidth = this.width * 0.2; // Central valley width
+        const centerX = this.width * 0.5;
+        
+        // Create valley floor
+        const valleyPoints: Vector2[] = [];
+        const segments = 20;
+        
+        for (let i = 0; i <= segments; i++) {
+            const t = i / segments;
+            const x = centerX - valleyWidth / 2 + valleyWidth * t;
+            const noise = this.noise2D(x * 0.02, 0) * 20;
+            const y = this.waterLevel + noise;
+            
+            valleyPoints.push({ x, y });
+        }
+        
+        const valleyFeature: TerrainFeature = {
+            path: this.createSmoothPath(valleyPoints),
+            points: valleyPoints,
+            type: 'depression',
+            position: this.calculateCentroid(valleyPoints),
+            size: valleyWidth,
+            detail: {
+                rockFormations: [],
+                vegetation: [],
+                erosion: []
+            }
+        };
+        
+        features.push(valleyFeature);
+        return features;
+    }
+    
+    private notifyVegetationSystem(feature: TerrainFeature) {
+        // Create vegetation clusters based on terrain type and slope
+        const vegetationPoints = this.calculateVegetationPoints(feature);
+        
+        vegetationPoints.forEach(point => {
+            const terrainInfo = this.getTerrainInfoAt(point.x, point.y);
+            this.vegetationSystem.createVegetationCluster({
+                position: point,
+                slope: terrainInfo.slope,
+                moisture: terrainInfo.moisture,
+                terrainHeight: terrainInfo.height
+            });
+        });
+    }
+    
+    private calculateVegetationPoints(feature: TerrainFeature): Vector2[] {
+        const points: Vector2[] = [];
+        const density = feature.type === 'slope' ? 0.3 : 0.5;
+        
+        // Sample points along the feature's surface
+        for (let i = 0; i < feature.points.length - 1; i++) {
+            const p1 = feature.points[i];
+            const p2 = feature.points[i + 1];
+            
+            // Create intermediate points for vegetation
+            const steps = Math.floor(Math.random() * 3) + 1;
+            for (let j = 0; j < steps; j++) {
+                if (Math.random() > density) continue;
+                
+                const t = j / steps;
+                const noise = this.noise2D(p1.x * 0.1, t) * 10;
+                
+                points.push({
+                    x: p1.x + (p2.x - p1.x) * t + noise,
+                    y: p1.y + (p2.y - p1.y) * t
+                });
+            }
+        }
+        
+        return points;
+    }
+    
     private generateRockFormations(feature: TerrainFeature): RockFormation[] {
+        if (feature.type !== 'cliff') return [];
+        
         const formations: RockFormation[] = [];
-        const formationCount = Math.floor(feature.size / 60); // Reduce rock count
+        // Significantly reduce formation count
+        const formationCount = Math.floor(feature.size / 200);
         
         for (let i = 0; i < formationCount; i++) {
             const position = this.getRandomPositionInFeature(feature);
             
-            // Only generate rocks near shoreline
+            // Only generate rocks away from water
             const distanceFromWater = Math.abs(position.y - this.waterLevel);
-            if (distanceFromWater > 100) continue;
+            if (distanceFromWater < 100) continue;
             
-            const size = 15 + Math.random() * 25; // Smaller rocks
+            // Create smaller, less jagged rocks
+            const size = 10 + Math.random() * 15;
             const points: Vector2[] = [];
-            const segments = 12;
+            const segments = 8;
             
-            // Generate rock shape
             for (let j = 0; j <= segments; j++) {
                 const angle = (j / segments) * Math.PI * 2;
-                let radius = size * (0.8 + this.noise2D(angle, i) * 0.3);
-                radius *= 1 + Math.sin(angle * 3) * 0.2;
+                // Reduce noise variation
+                let radius = size * (0.9 + this.noise2D(angle, i) * 0.2);
+                radius *= 1 + Math.sin(angle * 2) * 0.1;
                 
                 points.push({
                     x: position.x + Math.cos(angle) * radius,
@@ -294,9 +463,10 @@ private generateErosionPatterns(feature: TerrainFeature): ErosionDetail[] {
             }
     
             const rockPath = this.createRockPath(points);
-            const cracks = this.generateRockCracks(points, size);
-            const erosion = this.generateRockErosion(points, size);
-            const texture = this.generateRockTexture(points, size);
+            // Reduce or eliminate cracks and erosion for cleaner look
+            const cracks: Path2D[] = [];
+            const erosion: Path2D[] = [];
+            const texture = this.generateSimpleTexture(points, size);
             
             formations.push({
                 path: rockPath,
@@ -310,6 +480,84 @@ private generateErosionPatterns(feature: TerrainFeature): ErosionDetail[] {
         }
         
         return formations;
+    }
+
+    private generateSimpleTexture(points: Vector2[], size: number): Path2D {
+        const texture = new Path2D();
+        const center = this.calculateCentroid(points);
+        // Reduce texture density
+        const pointCount = Math.floor(size);
+        
+        for (let i = 0; i < pointCount; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const distance = Math.random() * size * 0.8;
+            const x = center.x + Math.cos(angle) * distance;
+            const y = center.y + Math.sin(angle) * distance;
+            
+            if (this.isPointInPolygon({ x, y }, points)) {
+                texture.moveTo(x, y);
+                // Smaller texture points
+                texture.arc(x, y, 0.5, 0, Math.PI * 2);
+            }
+        }
+        
+        return texture;
+    }
+    
+    // Update rock color generation for more subtle variations
+    private getRockColor(featureType: TerrainFeature['type']): HSLColor {
+        const baseColors = {
+            cliff: { h: 220, s: 15, b: 35 },
+            ledge: { h: 215, s: 20, b: 40 },
+            slope: { h: 210, s: 25, b: 45 },
+            depression: { h: 200, s: 20, b: 40 }
+        };
+        
+        const base = baseColors[featureType];
+        // Reduce color variation
+        return {
+            h: base.h + (Math.random() - 0.5) * 10,
+            s: base.s + (Math.random() - 0.5) * 5,
+            b: base.b + (Math.random() - 0.5) * 5,
+            a: 0.8 // Add some transparency
+        };
+    }
+    
+    // Update mountain feature creation to prevent overlapping
+    private createMountainFeature(startX: number, endX: number, side: 'left' | 'right'): TerrainFeature {
+        const points: Vector2[] = [];
+        const segments = 15;
+        
+        for (let i = 0; i <= segments; i++) {
+            const t = i / segments;
+            const x = startX + (endX - startX) * t;
+            
+            // Smoother height profile
+            const baseHeight = Math.sin(t * Math.PI) * this.height * 0.4;
+            const noiseScale = 0.003;
+            const variation = this.noise2D(x * noiseScale, side === 'left' ? 0 : 1) * this.height * 0.08;
+            
+            const y = this.waterLevel - baseHeight - variation;
+            points.push({ x, y });
+        }
+        
+        // Add base points with slight inset to prevent overlap
+        const inset = (endX - startX) * 0.1;
+        points.push({ x: endX - inset, y: this.height });
+        points.push({ x: startX + inset, y: this.height });
+        
+        return {
+            path: this.createSmoothPath(points),
+            points,
+            type: 'cliff',
+            position: this.calculateCentroid(points),
+            size: this.calculateFeatureSize(points),
+            detail: {
+                rockFormations: [],
+                vegetation: [],
+                erosion: []
+            }
+        };
     }
 
     private constrainToWaterLevel(feature: TerrainFeature) {
@@ -686,43 +934,6 @@ private getNeighborHeights(heightmap: number[][], x: number, y: number): number[
     }
     
     return inside;
-  }
-  
-  private getRockColor(featureType: TerrainFeature['type']): HSLColor {
-    const baseColors = {
-      cliff: { h: 220, s: 15, b: 30 },
-      ledge: { h: 215, s: 20, b: 35 },
-      slope: { h: 210, s: 25, b: 40 },
-      depression: { h: 200, s: 20, b: 35 }
-    };
-    
-    const base = baseColors[featureType];
-    return {
-      h: base.h + (Math.random() - 0.5) * 20,
-      s: base.s + (Math.random() - 0.5) * 10,
-      b: base.b + (Math.random() - 0.5) * 10,
-      a: 1
-    };
-  }
-  
-  private createTerrainGradient(
-    ctx: CanvasRenderingContext2D,
-    feature: TerrainFeature,
-    lighting: any
-  ): CanvasGradient {
-    const gradient = ctx.createLinearGradient(
-      feature.position.x,
-      feature.position.y - feature.size,
-      feature.position.x,
-      feature.position.y + feature.size
-    );
-    
-    const baseColor = this.getRockColor(feature.type);
-    gradient.addColorStop(0, `hsla(${baseColor.h}, ${baseColor.s}%, ${baseColor.b + 15}%, 1)`);
-    gradient.addColorStop(0.5, `hsla(${baseColor.h}, ${baseColor.s}%, ${baseColor.b}%, 1)`);
-    gradient.addColorStop(1, `hsla(${baseColor.h}, ${baseColor.s}%, ${baseColor.b - 10}%, 1)`);
-    
-    return gradient;
   }
 
   private drawRockFormation(

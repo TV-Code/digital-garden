@@ -36,6 +36,13 @@ interface Plant {
   };
 }
 
+interface VegetationClusterParams {
+  position: Vector2;
+  slope: number;
+  moisture: number;
+  terrainHeight: number;
+}
+
 interface Vector2 {
   x: number;
   y: number;
@@ -154,6 +161,92 @@ export class VegetationSystem {
       this.generatePlantsOfType(plantType, moistureMap);
     });
   }
+
+  createVegetationCluster(params: VegetationClusterParams) {
+    const { position, slope, moisture, terrainHeight } = params;
+    
+    // Determine which plants can grow here based on conditions
+    Object.values(this.PLANT_TYPES).forEach(plantType => {
+        // Skip if conditions aren't suitable
+        if (!this.isValidPlantLocation(plantType, moisture, slope)) return;
+        
+        // Calculate growth potential
+        const potential = this.evaluateGrowthPotential(position.x, position.y, plantType.type);
+        
+        // Determine cluster size based on conditions
+        const clusterSize = Math.floor(potential * 5) + 1;
+        
+        // Create cluster of plants
+        for (let i = 0; i < clusterSize; i++) {
+            if (Math.random() > plantType.density * potential) continue;
+            
+            // Add some variation to position within cluster
+            const offset = {
+                x: (Math.random() - 0.5) * 20,
+                y: (Math.random() - 0.5) * 20
+            };
+            
+            const plantPosition = {
+                x: position.x + offset.x,
+                y: position.y + offset.y
+            };
+            
+            // Create plant with type-specific variations
+            this.createPlant(plantType, plantPosition);
+        }
+    });
+}
+
+private generateFlowerGeometry(plant: Plant) {
+  // Modified to create more natural-looking flowers like in the reference
+  const stem = new Path2D();
+  const petalCount = 5 + Math.floor(Math.random() * 3); // Fewer, larger petals
+  const petalSize = plant.size * 0.3; // Larger petals
+  
+  // Create more natural curved stem
+  const stemHeight = plant.size * (0.8 + Math.random() * 0.4);
+  const stemCurve = (Math.random() - 0.5) * 10;
+  
+  stem.moveTo(plant.position.x, plant.position.y);
+  stem.quadraticCurveTo(
+      plant.position.x + stemCurve,
+      plant.position.y - stemHeight * 0.5,
+      plant.position.x + stemCurve * 1.5,
+      plant.position.y - stemHeight
+  );
+  plant.elements.details.push(stem);
+  
+  // Create more natural petal shapes
+  for (let i = 0; i < petalCount; i++) {
+      const petal = new Path2D();
+      const angle = (i / petalCount) * Math.PI * 2;
+      const petalWidth = petalSize * (1.2 + Math.random() * 0.4);
+      const petalLength = petalSize * (1.5 + Math.random() * 0.5);
+      
+      // Create natural petal curve
+      const cp1x = plant.position.x + Math.cos(angle) * petalWidth;
+      const cp1y = plant.position.y - stemHeight + Math.sin(angle) * petalWidth;
+      const cp2x = plant.position.x + Math.cos(angle) * petalLength * 0.8;
+      const cp2y = plant.position.y - stemHeight + Math.sin(angle) * petalLength * 0.8;
+      const endX = plant.position.x + Math.cos(angle) * petalLength;
+      const endY = plant.position.y - stemHeight + Math.sin(angle) * petalLength;
+      
+      petal.moveTo(plant.position.x + stemCurve * 1.5, plant.position.y - stemHeight);
+      petal.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, endX, endY);
+      plant.elements.foliage.push(petal);
+  }
+  
+  // Add center detail
+  const center = new Path2D();
+  center.arc(
+      plant.position.x + stemCurve * 1.5,
+      plant.position.y - stemHeight,
+      petalSize * 0.2,
+      0,
+      Math.PI * 2
+  );
+  plant.elements.details.push(center);
+}
 
   private generateGrowthZones(count: number, sizeScale: number): Vector2[] {
     const zones: Vector2[] = [];
@@ -404,45 +497,6 @@ export class VegetationSystem {
       }
       layer.closePath();
       plant.elements.foliage.push(layer);
-    }
-  }
-
-  private generateFlowerGeometry(plant: Plant) {
-    const stem = new Path2D();
-    const petalCount = 8 + Math.floor(Math.random() * 5);
-    const petalSize = plant.size * 0.2;
-    
-    // Create stem
-    stem.moveTo(plant.position.x, plant.position.y);
-    stem.quadraticCurveTo(
-      plant.position.x + Math.sin(plant.animation.phase) * 5,
-      plant.position.y - plant.size * 0.6,
-      plant.position.x + Math.sin(plant.animation.phase) * 10,
-      plant.position.y - plant.size
-    );
-    plant.elements.details.push(stem);
-    
-    // Create petals
-    for (let i = 0; i < petalCount; i++) {
-      const petal = new Path2D();
-      const angle = (i / petalCount) * Math.PI * 2;
-      const petalOffset = {
-        x: Math.cos(angle) * petalSize,
-        y: Math.sin(angle) * petalSize
-      };
-      
-      petal.moveTo(
-        plant.position.x + Math.sin(plant.animation.phase) * 10,
-        plant.position.y - plant.size
-      );
-      petal.quadraticCurveTo(
-        plant.position.x + Math.sin(plant.animation.phase) * 10 + petalOffset.x * 1.5,
-        plant.position.y - plant.size + petalOffset.y * 1.5,
-        plant.position.x + Math.sin(plant.animation.phase) * 10 + petalOffset.x,
-        plant.position.y - plant.size + petalOffset.y
-      );
-      
-      plant.elements.foliage.push(petal);
     }
   }
 

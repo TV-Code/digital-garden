@@ -1,9 +1,9 @@
 import { useRef, useCallback } from 'react';
 import { LightingSystem } from '../systems/environment/lighting';
-import { TerrainSystem } from '../systems/environment/TerrainSystem';
-import { WaterSystem } from '../systems/environment/WaterSystem';
-import { MountainRange } from '../systems/environment/MountainRange';
-import { AtmosphericSystem } from '../systems/environment/AtmosphericSystem';
+import { TerrainSystem } from '../systems/environment/core/TerrainSystem';
+import { WaterSystem } from '../systems/environment/core/WaterSystem';
+import { MountainRange } from '../systems/environment/features/MountainRange';
+import { AtmosphericSystem } from '../systems/environment/core/AtmosphericSystem';
 import { ColorSystem, ColorBridge } from '../utils/colors';
 
 interface Systems {
@@ -43,20 +43,20 @@ export const useSanctuary = () => {
     }, []);
 
     const generateMountainRanges = (width: number, height: number): MountainRange[] => {
-        return [
-            // Background peaks - more distant, softer
-            new MountainRange(height * 0.25, width * 0.6, 0.5, { x: -0.5, angle: 0 }),
-            new MountainRange(height * 0.3, width * 0.6, 0.5, { x: 0.5, angle: 0 }),
-            
-            // Mid mountains - more detail, stronger presence
-            new MountainRange(height * 0.35, width * 0.7, 0.7, { x: -0.3, angle: 0 }),
-            new MountainRange(height * 0.35, width * 0.7, 0.7, { x: 0.3, angle: 0 }),
-            
-            // Foreground mountains - highest detail and impact
-            new MountainRange(height * 0.4, width * 0.8, 1.0, { x: -0.2, angle: 0 }),
-            new MountainRange(height * 0.4, width * 0.8, 1.0, { x: 0.2, angle: 0 })
-        ];
-    };
+      return [
+          // Far background mountains - wide, low
+          new MountainRange(height * 0.35, width * 0.7, 0.4, { x: -0.6, angle: 0 }),
+          new MountainRange(height * 0.35, width * 0.7, 0.4, { x: 0.6, angle: 0 }),
+          
+          // Mid-range mountains - taller, more detailed
+          new MountainRange(height * 0.45, width * 0.6, 0.7, { x: -0.3, angle: 0 }),
+          new MountainRange(height * 0.45, width * 0.6, 0.7, { x: 0.3, angle: 0 }),
+          
+          // Foreground mountains - highest detail and impact
+          new MountainRange(height * 0.5, width * 0.5, 1.0, { x: -0.15, angle: 0 }),
+          new MountainRange(height * 0.5, width * 0.5, 1.0, { x: 0.15, angle: 0 })
+      ];
+  };
 
     const renderFrame = useCallback((ctx: CanvasRenderingContext2D, time: number) => {
         const deltaTime = lastFrameTimeRef.current ? time - lastFrameTimeRef.current : 0;

@@ -133,24 +133,64 @@ export const ColorSystem = {
               }
           }
       }
-  } as Record<TimeOfDay, TimeColors>,
-interpolateColors(time: number): TimeColors {
-        // Convert time (0-1) to the appropriate time period and blend
-        const periods: TimeOfDay[] = ['dawn', 'day', 'dusk', 'night'];
-        const periodLength = 1 / periods.length;
-        const periodIndex = Math.floor(time / periodLength);
-        const nextPeriodIndex = (periodIndex + 1) % periods.length;
-        const t = (time % periodLength) / periodLength;
+    } as Record<TimeOfDay, TimeColors>,
 
-        const currentPeriod = periods[periodIndex];
-        const nextPeriod = periods[nextPeriodIndex];
+    createGradientColors(baseColor: HSLColor, count: number = 5, options = {
+      darken: true,
+      alpha: 1
+  }): string[] {
+      return Array.from({ length: count }, (_, i) => {
+          const t = i / (count - 1);
+          const brightnessShift = options.darken ? -20 * t : 20 * t;
+          return this.toHSLString(
+              [
+                  baseColor[0],
+                  baseColor[1],
+                  this.clampValue(baseColor[2] + brightnessShift, 0, 100)
+              ],
+              options.alpha
+          );
+      });
+  },
 
-        return this.blendTimeColors(
-            this.times[currentPeriod],
-            this.times[nextPeriod],
-            t
-        );
-    },
+  toHSLString(color: HSLColor, alpha: number = 1): string {
+      return `hsla(${color[0]}, ${color[1]}%, ${color[2]}%, ${alpha})`;
+  },
+
+  clampValue(value: number, min: number, max: number): number {
+      if (isNaN(value)) return min;
+      return Math.max(min, Math.min(max, value));
+  },
+
+  createGradientColor(color: HSLColor, opacity: number = 1, lightness: number = 0): string {
+      return this.toHSLString(
+          [
+              color[0],
+              color[1],
+              this.clampValue(color[2] + lightness, 0, 100)
+          ],
+          opacity
+      );
+  },
+
+  lerp(a: number, b: number, t: number): number {
+    return a + (b - a) * t;
+},
+
+lerpAngle(a: number, b: number, t: number): number {
+    const diff = b - a;
+    let delta = ((((diff + 180) % 360) - 180) + 360) % 360 - 180;
+    return (a + delta * t + 360) % 360;
+},
+
+    // Color interpolation methods
+    interpolateColors(color1: HSLColor, color2: HSLColor, t: number): HSLColor {
+      return [
+          this.lerpAngle(color1[0], color2[0], t),
+          this.lerp(color1[1], color2[1], t),
+          this.lerp(color1[2], color2[2], t)
+      ];
+  },
 
     blendTimeColors(color1: TimeColors, color2: TimeColors, t: number): TimeColors {
         const blend = (a: HSLValues, b: HSLValues): HSLValues => {
@@ -187,26 +227,43 @@ interpolateColors(time: number): TimeColors {
         };
     },
 
-    lerp(a: number, b: number, t: number): number {
-        return a + (b - a) * t;
-    },
-
-    lerpAngle(a: number, b: number, t: number): number {
-        // Ensure shortest path for hue interpolation
-        const diff = b - a;
-        let delta = ((((diff + 180) % 360) - 180) + 360) % 360 - 180;
-        return (a + delta * t + 360) % 360;
+    // New vegetation-specific color utilities
+    vegetation: {
+        foliage: {
+            default: [120, 40, 35] as HSLColor,
+            spring: [95, 45, 40] as HSLColor,
+            summer: [120, 40, 35] as HSLColor,
+            autumn: [30, 70, 45] as HSLColor,
+            winter: [120, 20, 30] as HSLColor
+        },
+        flowers: {
+            red: [0, 70, 50] as HSLColor,
+            pink: [330, 60, 70] as HSLColor,
+            white: [0, 0, 90] as HSLColor,
+            yellow: [50, 80, 60] as HSLColor
+        },
+        bark: {
+            light: [30, 30, 40] as HSLColor,
+            dark: [20, 35, 25] as HSLColor,
+            red: [10, 40, 30] as HSLColor
+        }
     }
 };
 
 export const ColorBridge = {
-    fromColorSystem(color: HSLValues): { h: number; s: number; b: number } {
-        return { h: color[0], s: color[1], b: color[2] };
-    },
-    fromHSB(color: { h: number; s: number; b: number }): HSLValues {
-        return [color.h, color.s, color.b];
-    },
-    toHSLString(color: HSLValues, alpha: number = 1): string {
-        return `hsla(${color[0]}, ${color[1]}%, ${color[2]}%, ${alpha})`;
-    }
+  toHSLString: ColorSystem.toHSLString.bind(ColorSystem),
+  fromColorSystem(color: HSLValues): HSLColor {
+      return color;
+  },
+  fromHSB(color: HSLValues): HSLColor {
+      return color;
+  }
+};
+
+export const ColorUtils = {
+  createGradientColor: ColorSystem.createGradientColor.bind(ColorSystem),
+  toHSLString: ColorSystem.toHSLString.bind(ColorSystem),
+  clampValue: ColorSystem.clampValue.bind(ColorSystem),
+  createGradientColors: ColorSystem.createGradientColors.bind(ColorSystem),
+  interpolateColors: ColorSystem.interpolateColors.bind(ColorSystem)
 };

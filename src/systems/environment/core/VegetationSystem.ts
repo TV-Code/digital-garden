@@ -1,239 +1,1081 @@
 import { createNoise2D, createNoise3D } from "simplex-noise";
-import { ColorSystem, ColorBridge } from "../../utils/colors";
+import { ColorSystem, ColorBridge, ColorUtils, HSLColor } from "../../../utils/colors";
+import { Vector2, WindEffect, Zones, TreeStyle, VegetationClusterParams,  LightingEffect, GrowthEffect, BarkStyle } from "../../../types";
 
-interface PlantDefinition {
-  type: 'tree' | 'bush' | 'flower' | 'grass' | 'fern';
-  size: { min: number; max: number };
-  density: number;
-  conditions: {
-    minSlope: number;
-    maxSlope: number;
-    minMoisture: number;
-    preferredLight: number;
+export interface PlantDefinition {
+  type: PlantType;
+  size: {
+      min: number;
+      max: number;
   };
+  density: number;
+  conditions: PlantConditions;
+  variations?: PlantVariation[];
 }
 
-interface Plant {
-  type: PlantDefinition['type'];
+export type PlantType = 'tree' | 'bush' | 'flower' | 'grass' | 'fern';
+
+export interface PlantConditions {
+  minSlope: number;
+  maxSlope: number;
+  minMoisture: number;
+  preferredLight: number;
+  maxDensity?: number;
+  soilTypes?: SoilType[];
+}
+
+export type SoilType = 'rocky' | 'fertile' | 'sandy' | 'clay';
+
+// Plant instance and its components
+export interface Plant {
+  type: PlantType;
   position: Vector2;
   size: number;
   growth: number;
   variation: number;
-  elements: {
-    trunk?: Path2D;
-    foliage: Path2D[];
-    details: Path2D[];
-  };
-  colors: {
-    primary: HSLColor;
-    secondary: HSLColor;
-    detail: HSLColor;
-  };
-  animation: {
-    swayOffset: number;
-    growthSpeed: number;
-    phase: number;
-  };
-  style?: 'BIRCH' | 'WILLOW' | 'CHERRY';
+  elements: PlantElements;
+  colors: PlantColors;
+  animation: PlantAnimation;
+  style?: PlantStyle;
+  health?: number;
+  age?: number;
 }
 
-interface VegetationClusterParams {
+export interface PlantElements {
+  trunk?: Path2D;
+  foliage: Path2D[];
+  details: Path2D[];
+}
+
+export interface PlantColors {
+  primary: HSLColor;
+  secondary: HSLColor;
+  detail: HSLColor;
+}
+
+export interface PlantAnimation {
+  swayOffset: number;
+  growthSpeed: number;
+  phase: number;
+  swayAmount?: number;
+  swaySpeed?: number;
+}
+
+// Vegetation zones and clustering
+export interface VegetationZone {
+  bounds: Path2D;
   position: Vector2;
-  slope: number;
   moisture: number;
-  terrainHeight: number;
+  slope: number;
+  soilType: SoilType;
+  vegetationDensity: number;
+  conditions?: ZoneConditions;
 }
 
-interface TreeTrunkStyle {
+export interface ZoneConditions {
+  light: number;
+  temperature: number;
+  wind: number;
+  elevation: number;
+}
+
+export interface VegetationCluster {
+  position: Vector2;
+  plants: Plant[];
+  density: number;
+  radius: number;
+  type: PlantType;
+}
+
+// Styling and variations
+export interface PlantStyle {
+  trunk?: TrunkStyle;
+  foliage?: FoliageStyle;
+  seasonal?: SeasonalStyle;
+  animation?: AnimationStyle;
+}
+
+export interface TrunkStyle {
   color: HSLColor;
   width: number;
   taper: number;
   bend?: number;
   twist?: number;
-  markings?: HSLColor;
-  markingDensity?: number;
+  texture?: 'smooth' | 'rough' | 'bark' | 'striated';
 }
 
-interface TreeFoliageStyle {
+export interface FoliageStyle {
   colors: HSLColor[];
-  shape: 'drooping' | 'organic' | 'blossoms';
+  shape: FoliageShape;
   density: number;
   size: number;
-  animation: {
-      swayAmount: number;
-      swaySpeed: number;
-  };
+  texture?: 'smooth' | 'detailed' | 'complex';
 }
 
-interface TreeStyle {
-  trunk: TreeTrunkStyle;
-  foliage: TreeFoliageStyle;
+export type FoliageShape = 
+  | 'rounded' 
+  | 'conical' 
+  | 'spreading' 
+  | 'weeping' 
+  | 'columnar'
+  | 'vase'
+  | 'irregular';
+
+export interface SeasonalStyle {
+  spring: SeasonalVariation;
+  summer: SeasonalVariation;
+  autumn: SeasonalVariation;
+  winter: SeasonalVariation;
 }
 
-interface Vector2 {
-  x: number;
-  y: number;
+export interface SeasonalVariation {
+  colors: HSLColor[];
+  density: number;
+  animation: AnimationStyle;
 }
 
-interface HSLColor {
-  h: number;
-  s: number;
-  b: number;
-  a?: number;
+export interface AnimationStyle {
+  swayAmount: number;
+  swaySpeed: number;
+  growth: number;
+  phase: number;
+}
+
+export interface PlantVariation {
+  name: string;
+  style: PlantStyle;
+  probability: number;
+  conditions?: PlantConditions;
 }
 
 export class VegetationSystem {
   private noise2D: ReturnType<typeof createNoise2D>;
   private noise3D: ReturnType<typeof createNoise3D>;
   private plants: Plant[] = [];
-  private growthProgress: number = 0;
+  private season: 'spring' | 'summer' | 'autumn' | 'winter' = 'summer';
+  private timeOfDay: number = 0;
+  private windIntensity: number = 0;
+  private width: number;
+  private height: number;
+  private waterLevel: number;
+  private zones: Zones;
 
-  private readonly TREE_STYLES: Record<'WILLOW' | 'BIRCH' | 'CHERRY', TreeStyle> = {
-    WILLOW: {
-        trunk: {
-            color: { h: 30, s: 25, b: 35 },
-            width: 0.07,
-            taper: 0.9,
-            bend: 0.4
+  // Define TREE_STYLES before ENHANCED_TREE_STYLES
+  private readonly TREE_STYLES: Record<string, TreeStyle> = {};
+
+  private readonly ENHANCED_TREE_STYLES: Record<string, TreeStyle> = {
+      MAPLE: {
+          trunk: {
+              color: { h: 25, s: 30, b: 30 },
+              width: 0.06,
+              taper: 0.85,
+              twist: 0.2,
+              bark: {
+                  roughness: 0.8,
+                  pattern: 'ridged',
+                  colorVariation: 0.2
+              }
+          },
+          foliage: {
+              colors: [
+                  { h: 15, s: 80, b: 45 },  // Deep red
+                  { h: 25, s: 85, b: 50 },  // Orange-red
+                  { h: 35, s: 90, b: 55 }   // Gold
+              ],
+              shape: 'layered',
+              density: 1.2,
+              size: 1.3,
+              animation: {
+                  swayAmount: 0.35,
+                  swaySpeed: 0.7
+              }
+          }
+      },
+      WHITE_BIRCH: {
+          trunk: {
+              color: { h: 40, s: 5, b: 95 },
+              width: 0.045,
+              taper: 0.92,
+              markings: { h: 0, s: 0, b: 15 },
+              markingDensity: 1.5,
+              bark: {
+                  roughness: 0.3,
+                  pattern: 'peeling',
+                  colorVariation: 0.1
+              }
+          },
+          foliage: {
+              colors: [
+                  { h: 60, s: 70, b: 55 },  // Yellow-green
+                  { h: 80, s: 65, b: 50 },  // Fresh green
+                  { h: 90, s: 60, b: 45 }   // Deep green
+              ],
+              shape: 'wispy',
+              density: 0.9,
+              size: 1.1,
+              animation: {
+                  swayAmount: 0.4,
+                  swaySpeed: 0.9
+              }
+          }
+      },
+      WEEPING_WILLOW: {
+          trunk: {
+              color: { h: 30, s: 25, b: 35 },
+              width: 0.07,
+              taper: 0.88,
+              bend: 0.3,
+              bark: {
+                  roughness: 0.6,
+                  pattern: 'flowing',
+                  colorVariation: 0.15
+              }
+          },
+          foliage: {
+              colors: [
+                  { h: 65, s: 45, b: 40 },  // Sage green
+                  { h: 70, s: 40, b: 45 },  // Soft green
+                  { h: 75, s: 35, b: 50 }   // Light green
+              ],
+              shape: 'cascading',
+              density: 1.3,
+              size: 1.5,
+              animation: {
+                  swayAmount: 0.5,
+                  swaySpeed: 0.6
+              }
+          }
+      },
+      SAKURA: {
+          trunk: {
+              color: { h: 15, s: 30, b: 35 },
+              width: 0.055,
+              taper: 0.9,
+              twist: 0.25,
+              bark: {
+                  roughness: 0.4,
+                  pattern: 'smooth',
+                  colorVariation: 0.1
+              }
+          },
+          foliage: {
+              colors: [
+                  { h: 350, s: 85, b: 90 },  // Light pink
+                  { h: 345, s: 80, b: 85 },  // Medium pink
+                  { h: 355, s: 75, b: 95 }   // White-pink
+              ],
+              shape: 'cloud',
+              density: 1.1,
+              size: 1.2,
+              animation: {
+                  swayAmount: 0.3,
+                  swaySpeed: 0.8
+              }
+          }
+      }
+  };
+
+  private readonly PLANT_TYPES: Record<PlantType, PlantDefinition> = {
+    tree: {
+        type: 'tree',
+        size: {
+            min: 80,
+            max: 120
         },
-        foliage: {
-            colors: [
-                { h: 150, s: 30, b: 45 },
-                { h: 140, s: 35, b: 40 },
-                { h: 135, s: 40, b: 35 }
-            ],
-            shape: 'drooping',
-            density: 0.8,
-            size: 1.4,
-            animation: {
-                swayAmount: 0.4,
-                swaySpeed: 0.8
-            }
+        density: 0.3,
+        conditions: {
+            minSlope: 0,
+            maxSlope: 0.4,
+            minMoisture: 0.2,
+            preferredLight: 0.8,
+            soilTypes: ['fertile', 'clay']
         }
     },
-    BIRCH: {
-        trunk: {
-            color: { h: 35, s: 8, b: 98 },
-            markings: { h: 0, s: 0, b: 20 },
-            width: 0.05,
-            taper: 0.85,
-            markingDensity: 1.2
+    bush: {
+        type: 'bush',
+        size: {
+            min: 30,
+            max: 50
         },
-        foliage: {
-            colors: [
-                { h: 25, s: 85, b: 95 },
-                { h: 20, s: 80, b: 90 },
-                { h: 30, s: 75, b: 85 }
-            ],
-            shape: 'organic',
-            density: 0.9,
-            size: 1.3,
-            animation: {
-                swayAmount: 0.3,
-                swaySpeed: 0.6
-            }
+        density: 0.5,
+        conditions: {
+            minSlope: 0,
+            maxSlope: 0.6,
+            minMoisture: 0.3,
+            preferredLight: 0.6
         }
     },
-    CHERRY: {
-        trunk: {
-            color: { h: 20, s: 30, b: 35 },
-            width: 0.06,
-            taper: 0.8,
-            twist: 0.3
+    flower: {
+        type: 'flower',
+        size: {
+            min: 10,
+            max: 20
         },
-        foliage: {
-            colors: [
-                { h: 350, s: 80, b: 95 },
-                { h: 345, s: 85, b: 90 },
-                { h: 355, s: 75, b: 85 }
-            ],
-            shape: 'blossoms',
-            density: 1.1,
-            size: 1.2,
-            animation: {
-                swayAmount: 0.25,
-                swaySpeed: 0.7
-            }
+        density: 0.7,
+        conditions: {
+            minSlope: 0,
+            maxSlope: 0.3,
+            minMoisture: 0.4,
+            preferredLight: 0.9
+        }
+    },
+    grass: {
+        type: 'grass',
+        size: {
+            min: 5,
+            max: 15
+        },
+        density: 0.8,
+        conditions: {
+            minSlope: 0,
+            maxSlope: 0.5,
+            minMoisture: 0.2,
+            preferredLight: 0.7
+        }
+    },
+    fern: {
+        type: 'fern',
+        size: {
+            min: 15,
+            max: 30
+        },
+        density: 0.4,
+        conditions: {
+            minSlope: 0,
+            maxSlope: 0.4,
+            minMoisture: 0.6,
+            preferredLight: 0.3
         }
     }
 };
 
-  private zones: {
-    shoreline: { start: number; end: number };
-    vegetation: {
-      denseGrowth: Vector2[];
-      sparse: Vector2[];
-      sheltered: Vector2[];
-    };
-  };
-
-  
-
-  private readonly PLANT_TYPES: Record<string, PlantDefinition> = {
-    tree: {
-      type: 'tree',
-      size: { min: 80, max: 150 },
-      density: 0.3,
-      conditions: {
-        minSlope: 0,
-        maxSlope: 0.4,
-        minMoisture: 0.3,
-        preferredLight: 0.8
-      }
-    },
-    bush: {
-      type: 'bush',
-      size: { min: 30, max: 60 },
-      density: 0.6,
-      conditions: {
-        minSlope: 0,
-        maxSlope: 0.6,
-        minMoisture: 0.2,
-        preferredLight: 0.6
-      }
-    },
-    flower: {
-      type: 'flower',
-      size: { min: 15, max: 30 },
-      density: 0.8,
-      conditions: {
-        minSlope: 0,
-        maxSlope: 0.3,
-        minMoisture: 0.4,
-        preferredLight: 0.9
-      }
-    },
-    grass: {
-      type: 'grass',
-      size: { min: 10, max: 25 },
-      density: 1,
-      conditions: {
-        minSlope: 0,
-        maxSlope: 0.7,
-        minMoisture: 0.2,
-        preferredLight: 0.7
-      }
-    },
-    fern: {
-      type: 'fern',
-      size: { min: 20, max: 40 },
-      density: 0.5,
-      conditions: {
-        minSlope: 0,
-        maxSlope: 0.5,
-        minMoisture: 0.6,
-        preferredLight: 0.4
-      }
+  private generateCrownPoints(plant: Plant, style: FoliageStyle): Vector2[] {
+    const points: Vector2[] = [];
+    const segments = 24;
+    const baseSize = plant.size * style.size;
+    const centerY = plant.position.y - plant.size * 0.6;
+    
+    for (let i = 0; i <= segments; i++) {
+        const angle = (i / segments) * Math.PI * 2;
+        
+        // Create multi-layered noise for more organic shape
+        let radius = baseSize * 0.8;
+        
+        // Base shape variation
+        radius *= 1 + Math.sin(angle * 2) * 0.1;
+        
+        // Add multiple noise frequencies
+        radius *= 1 + this.noise2D(angle * 3 + plant.variation, 0) * 0.2;
+        radius *= 1 + this.noise2D(angle * 7 + plant.variation, 1) * 0.1;
+        
+        // Add style-based modifications
+        if (style.shape === 'weeping') {
+            radius *= 1 + Math.sin(angle) * 0.3;
+        } else if (style.shape === 'conical') {
+            radius *= 1 - Math.abs(Math.sin(angle)) * 0.2;
+        }
+        
+        points.push({
+            x: plant.position.x + Math.cos(angle) * radius,
+            y: centerY + Math.sin(angle) * radius * 0.6
+        });
     }
+    
+    return points;
+}
+
+constructor(width: number, height: number, waterLevel: number) {
+  this.width = width;
+  this.height = height;
+  this.waterLevel = waterLevel;
+  this.noise2D = createNoise2D();
+  this.noise3D = createNoise3D();
+
+  // Initialize zones first
+  this.zones = {
+      shoreline: {
+          start: waterLevel - height * 0.05,
+          end: waterLevel + height * 0.1
+      },
+      vegetation: {
+          denseGrowth: [],
+          sparse: [],
+          sheltered: []
+      }
   };
 
-  constructor(private width: number, private height: number, private waterLevel: number) {
+  // Now assign tree styles
+  Object.assign(this.TREE_STYLES, this.ENHANCED_TREE_STYLES);
 
-    this.noise2D = createNoise2D();
-    this.noise3D = createNoise3D();
-    this.initializeZones();
-    this.initializeVegetation();
+  // Initialize vegetation system
+  this.initializeZones();
+  this.initializeVegetation();
+}
+
+  private generateTreeGeometry(plant: Plant) {
+      const style = this.getTreeStyle(plant);
+      if (!style) {
+          this.generateOrganicTreeGeometry(plant);
+          return;
+      }
+
+      plant.elements.trunk = this.generateEnhancedTrunk(plant, style.trunk);
+      plant.elements.details = [];
+
+      switch (style.foliage.shape) {
+          case 'layered':
+              plant.elements.foliage = this.generateLayeredFoliage(plant, style.foliage);
+              break;
+          case 'cascading':
+              plant.elements.foliage = this.generateCascadingFoliage(plant, style.foliage);
+              break;
+          case 'cloud':
+              plant.elements.foliage = this.generateCloudFoliage(plant, style.foliage);
+              break;
+          case 'wispy':
+              plant.elements.foliage = this.generateWispyFoliage(plant, style.foliage);
+              break;
+          default:
+              plant.elements.foliage = this.generateOrganicFoliage(plant, style.foliage);
+      }
+
+      // Add bark details based on style
+      if (style.trunk.bark) {
+          this.addBarkTexture(plant, style.trunk.bark);
+      }
   }
+
+  private generateEnhancedTrunk(plant: Plant, style: TrunkStyle): Path2D {
+      const trunk = new Path2D();
+      const trunkWidth = plant.size * style.width;
+      const trunkHeight = plant.size * 0.85;
+      const points: Vector2[] = [];
+      const segments = 20;
+
+      // Generate main trunk curve with enhanced natural variation
+      for (let i = 0; i <= segments; i++) {
+          const t = i / segments;
+          const bendInfluence = style.bend ? Math.sin(t * Math.PI) * style.bend : 0;
+          const twistInfluence = style.twist ? Math.sin(t * Math.PI * 2) * style.twist : 0;
+          const naturalVariation = this.noise2D(t * 5 + plant.variation, t) * 0.1;
+          
+          const xOffset = (bendInfluence + twistInfluence + naturalVariation) * trunkHeight;
+          const yPos = plant.position.y - t * trunkHeight;
+          
+          points.push({
+              x: plant.position.x + xOffset,
+              y: yPos
+          });
+      }
+
+      // Generate trunk outline with varying width
+      this.drawTrunkOutline(trunk, points, trunkWidth, style.taper);
+      return trunk;
+  }
+
+  private generateCloudFoliage(plant: Plant, style: FoliageStyle): Path2D[] {
+      const foliage: Path2D[] = [];
+      const centerY = plant.position.y - plant.size * 0.6;
+      const baseSize = plant.size * style.size;
+      const clusters = 5 + Math.floor(Math.random() * 4);
+
+      // Generate main cloud shapes
+      for (let i = 0; i < clusters; i++) {
+          const cluster = new Path2D();
+          const angle = (i / clusters) * Math.PI * 2;
+          const distance = baseSize * 0.3 * (1 + Math.random() * 0.5);
+          const centerX = plant.position.x + Math.cos(angle) * distance;
+          const clusterCenterY = centerY + Math.sin(angle) * distance * 0.5;
+          const size = baseSize * (0.4 + Math.random() * 0.3);
+
+          // Generate organic cloud shape
+          const points: Vector2[] = [];
+          const segments = 24;
+          for (let j = 0; j <= segments; j++) {
+              const t = j / segments;
+              const cloudAngle = t * Math.PI * 2;
+              const radiusNoise = this.noise2D(cloudAngle * 2 + i, plant.variation) * 0.3;
+              const radius = size * (1 + radiusNoise);
+
+              points.push({
+                  x: centerX + Math.cos(cloudAngle) * radius,
+                  y: clusterCenterY + Math.sin(cloudAngle) * radius * 0.8
+              });
+          }
+
+          this.createSmoothSpline(cluster, points, true);
+          foliage.push(cluster);
+      }
+
+      // Add detail clusters
+      const detailCount = Math.floor(clusters * 2.5);
+      for (let i = 0; i < detailCount; i++) {
+          const detail = new Path2D();
+          const angle = Math.random() * Math.PI * 2;
+          const distance = baseSize * 0.4 * (1 + Math.random() * 0.6);
+          const detailX = plant.position.x + Math.cos(angle) * distance;
+          const detailY = centerY + Math.sin(angle) * distance * 0.5;
+          const detailSize = baseSize * 0.2 * (0.8 + Math.random() * 0.4);
+
+          const points: Vector2[] = [];
+          const segments = 16;
+          for (let j = 0; j <= segments; j++) {
+              const t = j / segments;
+              const detailAngle = t * Math.PI * 2;
+              const radiusNoise = this.noise2D(detailAngle * 3 + i, plant.variation) * 0.2;
+              const radius = detailSize * (1 + radiusNoise);
+
+              points.push({
+                  x: detailX + Math.cos(detailAngle) * radius,
+                  y: detailY + Math.sin(detailAngle) * radius * 0.9
+              });
+          }
+
+          this.createSmoothSpline(detail, points, true);
+          foliage.push(detail);
+      }
+
+      return foliage;
+  }
+
+  private generateCascadingFoliage(plant: Plant, style: FoliageStyle): Path2D[] {
+      const foliage: Path2D[] = [];
+      const baseY = plant.position.y - plant.size * 0.7;
+      const branchCount = Math.floor(12 + Math.random() * 6);
+
+      // Create main crown shape
+      const crown = new Path2D();
+      const crownPoints: Vector2[] = this.generateCrownPoints(plant, style);
+      this.createSmoothSpline(crown, crownPoints, true);
+      foliage.push(crown);
+
+      // Generate cascading branches
+      for (let i = 0; i < branchCount; i++) {
+          const branch = this.generateCascadingBranch(
+              plant,
+              i / branchCount,
+              style
+          );
+          foliage.push(branch);
+      }
+
+      return foliage;
+  }
+
+  private generateCascadingBranch(
+      plant: Plant,
+      t: number,
+      style: FoliageStyle
+  ): Path2D {
+      const branch = new Path2D();
+      const angle = t * Math.PI * 2;
+      const startRadius = plant.size * 0.3;
+      const length = plant.size * (0.6 + Math.random() * 0.4);
+      
+      const startX = plant.position.x + Math.cos(angle) * startRadius;
+      const startY = plant.position.y - plant.size * 0.6;
+      
+      branch.moveTo(startX, startY);
+
+      const points: Vector2[] = [];
+      const segments = 8;
+      let currentPoint = { x: startX, y: startY };
+
+      for (let i = 1; i <= segments; i++) {
+          const segmentT = i / segments;
+          const drop = segmentT * length;
+          const sway = Math.sin(segmentT * Math.PI) * length * 0.3;
+          const noise = this.noise2D(t * 10 + segmentT, plant.variation) * length * 0.15;
+
+          currentPoint = {
+              x: startX + sway + noise,
+              y: startY + drop
+          };
+          points.push(currentPoint);
+      }
+
+      this.createSmoothSpline(branch, points, false);
+      return branch;
+  }
+
+  private generateWispyFoliage(plant: Plant, style: FoliageStyle): Path2D[] {
+      const foliage: Path2D[] = [];
+      const baseY = plant.position.y - plant.size * 0.7;
+      const clusterCount = Math.floor(8 + Math.random() * 5);
+
+      // Create delicate, wispy clusters
+      for (let i = 0; i < clusterCount; i++) {
+          const angle = (i / clusterCount) * Math.PI * 2;
+          const distance = plant.size * (0.3 + Math.random() * 0.3);
+          const clusterX = plant.position.x + Math.cos(angle) * distance;
+          const clusterY = baseY + Math.sin(angle) * distance * 0.5;
+
+          // Generate multiple wispy strands per cluster
+          const strandCount = 3 + Math.floor(Math.random() * 4);
+          for (let j = 0; j < strandCount; j++) {
+              const strand = this.generateWispyStrand(
+                  { x: clusterX, y: clusterY },
+                  plant.size * 0.4,
+                  plant.variation + i + j
+              );
+              foliage.push(strand);
+          }
+      }
+
+      return foliage;
+  }
+
+  private generateWispyStrand(start: Vector2, length: number, seed: number): Path2D {
+      const strand = new Path2D();
+      const points: Vector2[] = [];
+      const segments = 6;
+
+      points.push(start);
+
+      for (let i = 1; i <= segments; i++) {
+          const t = i / segments;
+          const angle = Math.PI * -0.5 + (Math.random() - 0.5) * 0.8;
+          const segmentLength = length * (1 - t) * 0.3;
+          const noise = this.noise2D(t * 5 + seed, t) * length * 0.1;
+
+          const prev = points[points.length - 1];
+          points.push({
+              x: prev.x + Math.cos(angle) * segmentLength + noise,
+              y: prev.y + Math.sin(angle) * segmentLength
+          });
+      }
+
+      this.createSmoothSpline(strand, points, false);
+      return strand;
+  }
+
+  private addBarkTexture(plant: Plant, barkStyle: any) {
+    const trunkHeight = plant.size * 0.85;
+    const details: Path2D[] = [];
+
+    switch (barkStyle.pattern) {
+        case 'ridged':
+            details.push(...this.generateRidgedBark(plant, trunkHeight, barkStyle));
+            break;
+        case 'peeling':
+            details.push(...this.generatePeelingBark(plant, trunkHeight, barkStyle));
+            break;
+        case 'flowing':
+            details.push(...this.generateFlowingBark(plant, trunkHeight, barkStyle));
+            break;
+        case 'smooth':
+            details.push(...this.generateSmoothBark(plant, trunkHeight, barkStyle));
+            break;
+    }
+
+    plant.elements.details = details;
+}
+
+private generateRidgedBark(plant: Plant, height: number, style: any): Path2D[] {
+    const ridges: Path2D[] = [];
+    const ridgeCount = Math.floor(height / 8);
+    
+    for (let i = 0; i < ridgeCount; i++) {
+        const ridge = new Path2D();
+        const y = plant.position.y - (i / ridgeCount) * height;
+        const width = plant.size * 0.1;
+        
+        const baseX = plant.position.x;
+        const roughness = style.roughness * 5;
+        const points: Vector2[] = [];
+        
+        // Generate ridge points with natural variation
+        for (let j = 0; j <= 8; j++) {
+            const t = j / 8;
+            const noise = this.noise2D(t * 10 + i, y) * roughness;
+            points.push({
+                x: baseX + (t - 0.5) * width + noise,
+                y: y + noise * 0.5
+            });
+        }
+        
+        this.createSmoothSpline(ridge, points, false);
+        ridges.push(ridge);
+    }
+    
+    return ridges;
+}
+
+private generatePeelingBark(plant: Plant, height: number, style: any): Path2D[] {
+    const peels: Path2D[] = [];
+    const peelCount = Math.floor(height / 15);
+    
+    for (let i = 0; i < peelCount; i++) {
+        const peel = new Path2D();
+        const y = plant.position.y - (i / peelCount) * height;
+        const width = plant.size * 0.08 * (0.8 + Math.random() * 0.4);
+        const peelHeight = 10 + Math.random() * 15;
+        
+        // Create curling peel shape
+        const curlStrength = 0.3 + Math.random() * 0.5;
+        const points: Vector2[] = [];
+        
+        for (let j = 0; j <= 10; j++) {
+            const t = j / 10;
+            const curl = Math.sin(t * Math.PI) * curlStrength;
+            const noise = this.noise2D(t * 5 + i, y) * 2;
+            
+            points.push({
+                x: plant.position.x + width * curl + noise,
+                y: y + t * peelHeight
+            });
+        }
+        
+        this.createSmoothSpline(peel, points, false);
+        peels.push(peel);
+    }
+    
+    return peels;
+}
+
+private generateFlowingBark(plant: Plant, height: number, style: any): Path2D[] {
+    const lines: Path2D[] = [];
+    const lineCount = Math.floor(height / 10);
+    
+    for (let i = 0; i < lineCount; i++) {
+        const line = new Path2D();
+        const startY = plant.position.y - (i / lineCount) * height;
+        const length = 20 + Math.random() * 30;
+        
+        const points: Vector2[] = [];
+        for (let j = 0; j <= 8; j++) {
+            const t = j / 8;
+            const noise = this.noise2D(t * 8 + i, startY) * 4;
+            points.push({
+                x: plant.position.x + noise,
+                y: startY + t * length + noise * 0.5
+            });
+        }
+        
+        this.createSmoothSpline(line, points, false);
+        lines.push(line);
+    }
+    
+    return lines;
+}
+
+private generateSmoothBark(plant: Plant, height: number, style: any): Path2D[] {
+    const marks: Path2D[] = [];
+    const markCount = Math.floor(height / 20);
+    
+    for (let i = 0; i < markCount; i++) {
+        const mark = new Path2D();
+        const y = plant.position.y - (i / markCount) * height;
+        
+        // Create subtle horizontal marks
+        const width = plant.size * 0.06 * (0.8 + Math.random() * 0.4);
+        const noise = this.noise2D(i, y) * 2;
+        
+        mark.moveTo(plant.position.x - width/2 + noise, y);
+        mark.quadraticCurveTo(
+            plant.position.x, y + noise * 0.5,
+            plant.position.x + width/2 + noise, y
+        );
+        
+        marks.push(mark);
+    }
+    
+    return marks;
+}
+
+private applySeasonalEffects(plant: Plant, time: number) {
+    const seasonalTransition = Math.sin(time * 0.0001) * 0.5 + 0.5;
+    const colors = plant.colors;
+
+    switch (this.season) {
+        case 'autumn':
+            colors.primary.h = this.lerpColor(120, 30, seasonalTransition);
+            colors.primary.s = this.lerpColor(40, 80, seasonalTransition);
+            colors.primary.b = this.lerpColor(35, 45, seasonalTransition);
+            break;
+        case 'winter':
+            colors.primary.s *= (1 - seasonalTransition * 0.5);
+            colors.primary.b += seasonalTransition * 20;
+            break;
+        case 'spring':
+            colors.primary.h = this.lerpColor(120, 90, seasonalTransition);
+            colors.primary.s = this.lerpColor(30, 60, seasonalTransition);
+            colors.primary.b = this.lerpColor(35, 50, seasonalTransition);
+            break;
+    }
+}
+
+private lerpColor(start: number, end: number, t: number): number {
+    return start + (end - start) * t;
+}
+
+private updateWindEffect(time: number) {
+    // Create dynamic wind patterns
+    this.windIntensity = (
+        Math.sin(time * 0.001) * 0.3 +
+        Math.sin(time * 0.0017) * 0.2 +
+        Math.sin(time * 0.003) * 0.1
+    ) * 0.5 + 0.5;
+}
+
+public updateZone(zone: any) {
+    // Handle vegetation zone updates
+    const affectedPlants = this.plants.filter(plant => 
+        this.isPointInZone(plant.position, zone)
+    );
+
+    affectedPlants.forEach(plant => {
+        this.updatePlantConditions(plant, zone);
+    });
+}
+
+private isPointInZone(point: Vector2, zone: any): boolean {
+    // Check if a point is within a vegetation zone
+    const dx = point.x - zone.position.x;
+    const dy = point.y - zone.position.y;
+    return Math.sqrt(dx * dx + dy * dy) < zone.radius;
+}
+
+private updatePlantConditions(plant: Plant, zone: any) {
+    // Update plant based on zone conditions
+    plant.colors.primary.s *= zone.moisture;
+    plant.colors.primary.b *= 0.8 + zone.moisture * 0.4;
+    plant.animation.swayAmount *= 0.8 + zone.moisture * 0.4;
+}
+
+private calculateWindEffect(plant: Plant, time: number): WindEffect {
+  return {
+      intensity: this.windIntensity * (1 + this.noise2D(time * 0.001, plant.variation) * 0.5),
+      direction: this.noise2D(time * 0.0005, 0) * Math.PI * 2,
+      turbulence: this.noise3D(plant.position.x * 0.01, plant.position.y * 0.01, time * 0.001),
+      gustiness: Math.max(0, this.noise2D(time * 0.002, plant.variation))
+  };
+}
+
+private applyPlantTransforms(
+  ctx: CanvasRenderingContext2D, 
+  plant: Plant, 
+  baseTransform: any, 
+  windEffect: WindEffect
+) {
+  const windForce = Math.sin(
+      windEffect.direction + 
+      plant.position.x * 0.02 + 
+      plant.position.y * 0.01
+  ) * windEffect.intensity * 20;
+
+  const turbulence = windEffect.turbulence * 10 * plant.variation;
+  
+  ctx.translate(plant.position.x, plant.position.y);
+  ctx.scale(baseTransform.growth, baseTransform.growth);
+  ctx.rotate(windForce * 0.02 + turbulence * 0.01);
+  ctx.translate(-plant.position.x, -plant.position.y);
+  ctx.translate(
+      windForce + turbulence, 
+      Math.sin(windForce * 0.5) * 5
+  );
+}
+
+private drawEnhancedTrunk(
+  ctx: CanvasRenderingContext2D, 
+  plant: Plant, 
+  transform: any
+) {
+  if (!plant.elements.trunk) return;
+
+  ctx.save();
+  
+  const style = this.getTreeStyle(plant);
+  const gradient = this.createTrunkGradient(ctx, plant, 
+      style?.trunk.color || plant.colors.detail
+  );
+
+  // Add enhanced shadows based on transform
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.2)';
+  ctx.shadowBlur = 4;
+  ctx.shadowOffsetX = transform.sway.x * 0.5;
+  ctx.shadowOffsetY = 2;
+
+  ctx.fillStyle = gradient;
+  ctx.fill(plant.elements.trunk);
+
+  // Draw bark details with proper blending
+  if (plant.elements.details.length > 0) {
+      ctx.globalCompositeOperation = 'multiply';
+      plant.elements.details.forEach(detail => {
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+          ctx.fill(detail);
+      });
+  }
+
+  ctx.restore();
+}
+
+private drawEnhancedFoliage(
+  ctx: CanvasRenderingContext2D, 
+  plant: Plant, 
+  time: number, 
+  baseTransform: any,
+  windEffect: WindEffect
+) {
+  const style = this.getTreeStyle(plant);
+  if (!style) return;
+
+  const foliageCount = plant.elements.foliage.length;
+  
+  plant.elements.foliage.forEach((foliage, i) => {
+      ctx.save();
+      
+      const depth = i / foliageCount;
+      const windOffset = this.calculateFoliageWindOffset(
+          plant, i, time, windEffect, depth
+      );
+
+      ctx.translate(windOffset.x, windOffset.y);
+
+      const gradient = this.createEnhancedFoliageGradient(
+          ctx, plant, style, depth
+      );
+      
+      this.applyFoliageEffects(ctx, depth, baseTransform);
+      
+      ctx.fillStyle = gradient;
+      ctx.fill(foliage);
+      
+      if (i === foliageCount - 1) {
+          this.addFoliageHighlights(ctx, foliage, style);
+      }
+      
+      ctx.restore();
+  });
+}
+
+private createFoliageGradient(ctx: CanvasRenderingContext2D, plant: Plant, style: any, depth: number) {
+  const color = style?.foliage?.color || plant.colors.primary;
+  const size = plant.size * (style?.foliage?.size || 1);
+  
+  const gradient = ctx.createRadialGradient(
+      plant.position.x, plant.position.y - plant.size * 0.6,
+      0,
+      plant.position.x, plant.position.y - plant.size * 0.6,
+      size
+  );
+  
+  const opacity = clampValue(0.9 - depth * 0.15, 0, 1);
+  
+  gradient.addColorStop(0, createGradientColor(color, opacity, 8));
+  gradient.addColorStop(0.5, createGradientColor(color, opacity * 0.95, 4));
+  gradient.addColorStop(0.7, createGradientColor(color, opacity * 0.9, 0));
+  gradient.addColorStop(1, createGradientColor(color, opacity * 0.8, -5));
+  
+  return gradient;
+}
+
+private createTrunkGradient(ctx: CanvasRenderingContext2D, plant: Plant, color: HSLColor) {
+  const gradient = ctx.createLinearGradient(
+      plant.position.x - plant.size * 0.1,
+      plant.position.y,
+      plant.position.x + plant.size * 0.1,
+      plant.position.y - plant.size
+  );
+
+  gradient.addColorStop(0, createGradientColor(color, 0.95, 0));
+  gradient.addColorStop(0.3, createGradientColor(color, 0.95, -3));
+  gradient.addColorStop(0.7, createGradientColor(color, 0.95, -6));
+  gradient.addColorStop(1, createGradientColor(color, 0.95, -10));
+
+  return gradient;
+}
+
+private createEnhancedFoliageGradient(
+  ctx: CanvasRenderingContext2D,
+  plant: Plant,
+  style: TreeStyle,
+  depth: number
+): CanvasGradient {
+  const color = style.foliage.colors[0];
+  const size = plant.size * style.foliage.size;
+  
+  const gradient = ctx.createRadialGradient(
+      plant.position.x, plant.position.y - plant.size * 0.6,
+      0,
+      plant.position.x, plant.position.y - plant.size * 0.6,
+      size
+  );
+  
+  const opacity = clampValue(0.9 - depth * 0.15, 0, 1);
+  
+  gradient.addColorStop(0, createGradientColor(color, opacity, 8));
+  gradient.addColorStop(0.3, createGradientColor(color, opacity * 0.95, 4));
+  gradient.addColorStop(0.7, createGradientColor(color, opacity * 0.9, 0));
+  gradient.addColorStop(1, createGradientColor(color, opacity * 0.8, -5));
+  
+  return gradient;
+}
+
+private calculateFoliageWindOffset(
+  plant: Plant,
+  layerIndex: number,
+  time: number,
+  windEffect: WindEffect,
+  depth: number
+): Vector2 {
+  const basePhase = time * 0.001 + plant.animation.swayOffset;
+  const layerPhase = basePhase + layerIndex * 0.2;
+  
+  const swayAmount = 2 * (1 - depth * 0.3) * windEffect.intensity;
+  const swayX = Math.sin(layerPhase * windEffect.direction) * swayAmount;
+  const swayY = Math.cos(layerPhase * 0.7) * swayAmount * 0.5;
+  
+  return {
+      x: swayX + windEffect.turbulence * 5,
+      y: swayY + Math.abs(windEffect.turbulence) * 3
+  };
+}
+
+private addFoliageHighlights(
+  ctx: CanvasRenderingContext2D,
+  foliage: Path2D,
+  style: TreeStyle
+) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'overlay';
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+  ctx.lineWidth = 0.5;
+  ctx.stroke(foliage);
+  ctx.restore();
+}
+
+// Override the draw method to include enhanced effects
+draw(ctx: CanvasRenderingContext2D, time: number) {
+    this.updateWindEffect(time);
+    
+    const sortedPlants = [...this.plants].sort((a, b) => a.position.y - b.position.y);
+    
+    sortedPlants.forEach(plant => {
+        this.applySeasonalEffects(plant, time);
+        this.drawEnhancedPlant(ctx, plant, time);
+    });
+}
+
+private drawEnhancedPlant(ctx: CanvasRenderingContext2D, plant: Plant, time: number) {
+    const baseTransform = this.calculatePlantTransform(plant, time);
+    const windEffect = this.calculateWindEffect(plant, time);
+    
+    ctx.save();
+    
+    // Apply transformations
+    this.applyPlantTransforms(ctx, plant, baseTransform, windEffect);
+    
+    // Draw plant elements with enhanced effects
+    if (plant.elements.trunk) {
+        this.drawEnhancedTrunk(ctx, plant, baseTransform);
+    }
+    
+    this.drawEnhancedFoliage(ctx, plant, time, baseTransform, windEffect);
+    
+    ctx.restore();
+}
 
   private initializeZones() {
     const shoreline = {
@@ -514,51 +1356,6 @@ export class VegetationSystem {
     });
   }
 
-  private generateTreeGeometry(plant: Plant) {
-    try {
-        // Get available styles
-        const styles = Object.keys(this.TREE_STYLES) as Array<keyof typeof this.TREE_STYLES>;
-
-        // Assign style if not already present
-        if (!plant.style && styles.length > 0) {
-            const randomIndex = Math.floor(Math.random() * styles.length);
-            plant.style = styles[randomIndex];
-        }
-
-        // Get style configuration using type guard
-        const style = this.getTreeStyle(plant);
-        if (!style) {
-            console.warn('No valid tree style found, using default');
-            this.generateOrganicTreeGeometry(plant);
-            return;
-        }
-
-        // Generate trunk with artistic styling
-        plant.elements.trunk = this.generateStylizedTrunk(plant, style.trunk);
-
-        // Generate foliage based on artistic style
-        switch (style.foliage.shape) {
-            case 'organic':
-                plant.elements.foliage = this.generateOrganicFoliage(plant, style.foliage);
-                break;
-            case 'blossoms':
-                plant.elements.foliage = this.generateBlossom(plant, style.foliage);
-                break;
-            case 'drooping':
-                plant.elements.foliage = this.generateDroopingFoliage(plant, style.foliage);
-                break;
-            default:
-                plant.elements.foliage = this.generateOrganicFoliage(plant, style.foliage);
-        }
-
-        // The trunk details are now handled within generateStylizedTrunk
-    } catch (error) {
-        console.warn('Error generating artistic tree:', error);
-        this.generateOrganicTreeGeometry(plant);
-    }
-}
-
-
 private generateOrganicTreeGeometry(plant: Plant) {
   // Create a natural-looking default tree
   const defaultStyle = {
@@ -789,46 +1586,6 @@ private generateFlowerCluster(position: Vector2, size: number, colors: any[]): P
   }
   
   return cluster;
-}
-
-
-private drawEnhancedFoliage(ctx: CanvasRenderingContext2D, plant: Plant, element: Path2D, index: number, time: number) {
-  const style = this.TREE_STYLES[plant.style];
-  if (!style) return;
-
-  ctx.save();
-  
-  // Apply artistic animation
-  const swayAmount = style.foliage.animation.swayAmount;
-  const swaySpeed = style.foliage.animation.swaySpeed;
-  const sway = Math.sin(time * 0.001 * swaySpeed + plant.animation.swayOffset + index * 0.2) * swayAmount;
-  const verticalSway = Math.cos(time * 0.001 * swaySpeed * 0.7 + plant.animation.swayOffset) * swayAmount * 0.5;
-  
-  ctx.translate(sway * plant.size, verticalSway * plant.size);
-
-  // Create sophisticated gradient based on style
-  const colors = style.foliage.colors;
-  const gradient = this.createArtisticGradient(ctx, plant, colors, index);
-  
-  // Apply artistic effects
-  ctx.fillStyle = gradient;
-  
-  // Add depth and volume with shadows
-  ctx.shadowColor = 'rgba(0, 0, 0, 0.1)';
-  ctx.shadowBlur = 10;
-  ctx.shadowOffsetX = sway * 5;
-  ctx.shadowOffsetY = 5 + verticalSway * 3;
-  
-  ctx.fill(element);
-
-  // Add highlight details
-  if (index === 0) {
-      ctx.strokeStyle = `hsla(${colors[0].h}, ${colors[0].s}%, ${Math.min(colors[0].b + 10, 100)}%, 0.2)`;
-      ctx.lineWidth = 1;
-      ctx.stroke(element);
-  }
-
-  ctx.restore();
 }
 
 private createArtisticGradient(
@@ -1304,16 +2061,6 @@ private drawTreeStyle(ctx: CanvasRenderingContext2D, plant: Plant) {
   return true;
 }
 
-draw(ctx: CanvasRenderingContext2D, time: number) {
-  // Sort plants by y position for proper layering
-  const sortedPlants = [...this.plants].sort((a, b) => a.position.y - b.position.y);
-  
-  // Draw plants in layers for better depth
-  sortedPlants.forEach(plant => {
-      this.drawPlant(ctx, plant, time);
-  });
-}
-
 private drawPlant(ctx: CanvasRenderingContext2D, plant: Plant, time: number) {
   ctx.save();
   
@@ -1389,24 +2136,6 @@ private drawTrunk(ctx: CanvasRenderingContext2D, plant: Plant, transform: any) {
   ctx.restore();
 }
 
-private createTrunkGradient(ctx: CanvasRenderingContext2D, plant: Plant, color: HSLColor) {
-  // Create more sophisticated trunk gradient
-  const gradient = ctx.createLinearGradient(
-      plant.position.x - plant.size * 0.1,
-      plant.position.y,
-      plant.position.x + plant.size * 0.1,
-      plant.position.y - plant.size
-  );
-
-  // Add multiple color stops for more depth
-  gradient.addColorStop(0, `hsla(${color.h}, ${color.s}%, ${color.b}%, 0.95)`);
-  gradient.addColorStop(0.3, `hsla(${color.h}, ${color.s}%, ${color.b - 3}%, 0.95)`);
-  gradient.addColorStop(0.7, `hsla(${color.h}, ${color.s}%, ${color.b - 6}%, 0.95)`);
-  gradient.addColorStop(1, `hsla(${color.h}, ${color.s}%, ${color.b - 10}%, 0.95)`);
-
-  return gradient;
-}
-
 private drawBirchMarkings(ctx: CanvasRenderingContext2D, plant: Plant, style: any) {
   ctx.save();
   ctx.globalCompositeOperation = 'multiply';
@@ -1466,26 +2195,6 @@ private calculateLayerOffset(plant: Plant, layerIndex: number, time: number, tra
       x: Math.sin(time * 0.001 + layerPhase) * 2 * swayMultiplier,
       y: Math.cos(time * 0.001 * 0.7 + layerPhase) * 1 * swayMultiplier
   };
-}
-
-private createFoliageGradient(ctx: CanvasRenderingContext2D, plant: Plant, style: any, depth: number) {
-  const color = style?.foliage?.color || plant.colors.primary;
-  const size = plant.size * (style?.foliage?.size || 1);
-  
-  const gradient = ctx.createRadialGradient(
-      plant.position.x, plant.position.y - plant.size * 0.6,
-      0,
-      plant.position.x, plant.position.y - plant.size * 0.6,
-      size
-  );
-  
-  const opacity = 0.9 - depth * 0.15;
-  gradient.addColorStop(0, `hsla(${color.h}, ${color.s}%, ${color.b + 8}%, ${opacity})`);
-  gradient.addColorStop(0.5, `hsla(${color.h}, ${color.s}%, ${color.b + 4}%, ${opacity})`);
-  gradient.addColorStop(0.7, `hsla(${color.h}, ${color.s}%, ${color.b}%, ${opacity})`);
-  gradient.addColorStop(1, `hsla(${color.h}, ${color.s}%, ${color.b - 5}%, ${opacity * 0.9})`);
-  
-  return gradient;
 }
 
 private applyFoliageEffects(ctx: CanvasRenderingContext2D, depth: number, transform: any) {

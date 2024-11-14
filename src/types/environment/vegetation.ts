@@ -4,6 +4,7 @@ import { Vector2 } from '../index';
 // Core Plant Types
 export type PlantType = 'tree' | 'bush' | 'flower' | 'grass' | 'fern';
 export type SoilType = 'rocky' | 'fertile' | 'sandy' | 'clay';
+export type TreeStyleType = 'WHITE_BIRCH' | 'MAPLE' | 'WEEPING_WILLOW' | 'SAKURA';
 
 // Plant Growth and Conditions
 export interface PlantDefinition {
@@ -94,6 +95,7 @@ export interface PlantAnimation {
     phase: number;
     swayAmount?: number;
     swaySpeed?: number;
+    windEffect?: WindEffect;
 }
 
 export interface AnimationStyle {
@@ -191,4 +193,11 @@ export interface BranchingPattern {
     angle: number;
     distribution: 'regular' | 'random' | 'clustered';
     length: number;
+}
+
+export interface VegetationClusterParams {
+    position: Vector2;
+    slope: number;
+    moisture: number;
+    terrainHeight: number;
 }

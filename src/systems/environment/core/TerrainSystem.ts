@@ -19,8 +19,8 @@ export class TerrainSystem {
     private noise3D: ReturnType<typeof createNoise3D>;
     private staticBuffer: OffscreenCanvas;
     private staticCtx: OffscreenCanvasRenderingContext2D;
-    private vegetationSystem: VegetationSystem;
     private renderer: TerrainRenderer;
+    public vegetation: VegetationSystem;
     
     private readonly TERRAIN_PARAMS = {
         mountainHeight: 0.8,
@@ -37,7 +37,7 @@ export class TerrainSystem {
     ) {
         this.noise2D = createNoise2D();
         this.noise3D = createNoise3D();
-        this.vegetationSystem = new VegetationSystem(width, height, waterLevel);
+        this.vegetation = new VegetationSystem(width, height, waterLevel);
 
         this.renderer = new TerrainRenderer(width, height);
         
@@ -47,6 +47,31 @@ export class TerrainSystem {
         
         // Generate initial terrain
         this.generateTerrain();
+    }
+
+    public drawTerrain(ctx: CanvasRenderingContext2D, time: number, lighting: any) {
+        ctx.save();
+        
+        // Draw base terrain
+        this.layers.forEach(layer => {
+            this.renderer.drawLayer(ctx, layer, time, lighting);
+        });
+        
+        ctx.restore();
+    }
+
+    public draw(ctx: CanvasRenderingContext2D, time: number, lighting: any) {
+        this.drawTerrain(ctx, time, lighting);
+        this.vegetation.draw(ctx, time);
+    }
+
+    public update(time: number, deltaTime: number) {
+        // Update terrain
+        this.updateErosion(deltaTime);
+        this.updateColors(time);
+        
+        // Update vegetation
+        this.vegetation.update(time, deltaTime);
     }
 
     private generateTerrain() {
@@ -218,14 +243,6 @@ export class TerrainSystem {
         }
         
         return cracks;
-    }
-
-    draw(ctx: CanvasRenderingContext2D, time: number, lighting: any) {
-        ctx.drawImage(this.staticBuffer, 0, 0);
-        
-        this.layers.forEach(layer => {
-            this.renderer.drawLayer(ctx, layer, time, lighting);
-        });
     }
 
     private drawLayer(
@@ -483,18 +500,6 @@ private getRockColor(type: TerrainFeature['type']): HSLColor {
     // Get color from config and ensure it's in HSLColor array format
     const color = TerrainConfig.features[type].color;
     return color;
-}
-
-// Update methods for dynamic elements
-update(time: number, deltaTime: number) {
-    // Update erosion systems
-    this.updateErosion(deltaTime);
-    
-    // Update vegetation
-    this.updateVegetation(time, deltaTime);
-    
-    // Update lighting and colors
-    this.updateColors(time);
 }
 
 private updateColors(time: number) {
@@ -1123,6 +1128,11 @@ private renderStaticElements() {
 
 private drawRockFormations(ctx: CanvasRenderingContext2D, formations: RockFormation[]) {
     formations.forEach(formation => {
+        if (!formation.color || !Array.isArray(formation.color)) {
+            // Use default color if formation color is missing or invalid
+            formation.color = TerrainConfig.features.cliff.color;
+        }
+        
         ctx.save();
         
         // Draw main rock shape
@@ -1131,16 +1141,20 @@ private drawRockFormations(ctx: CanvasRenderingContext2D, formations: RockFormat
             formation.position.x, formation.position.y + formation.size
         );
         
-        gradient.addColorStop(0, `hsla(${formation.color.h}, ${formation.color.s}%, ${formation.color.b + 10}%, 0.9)`);
-        gradient.addColorStop(0.5, `hsla(${formation.color.h}, ${formation.color.s}%, ${formation.color.b}%, 0.8)`);
-        gradient.addColorStop(1, `hsla(${formation.color.h}, ${formation.color.s}%, ${formation.color.b - 10}%, 0.7)`);
+        const h = formation.color[0];
+        const s = formation.color[1];
+        const b = formation.color[2];
+        
+        gradient.addColorStop(0, `hsla(${h}, ${s}%, ${Math.min(100, b + 10)}%, 0.9)`);
+        gradient.addColorStop(0.5, `hsla(${h}, ${s}%, ${b}%, 0.8)`);
+        gradient.addColorStop(1, `hsla(${h}, ${s}%, ${Math.max(0, b - 10)}%, 0.7)`);
         
         ctx.fillStyle = gradient;
         ctx.fill(formation.path);
         
         // Draw rock details
         ctx.globalAlpha = 0.3;
-        ctx.strokeStyle = `hsla(${formation.color.h}, ${formation.color.s}%, ${Math.max(0, formation.color.b - 20)}%, 1)`;
+        ctx.strokeStyle = `hsla(${h}, ${s}%, ${Math.max(0, b - 20)}%, 1)`;
         ctx.lineWidth = 0.5;
         
         // Draw cracks
@@ -1187,7 +1201,7 @@ private updateErosion(deltaTime: number) {
 }
 
 private updateVegetation(time: number, deltaTime: number) {
-    this.vegetationSystem.update(time, deltaTime);
+    this.vegetation.update(time, deltaTime);
     
     // Update vegetation zones
     this.layers.forEach(layer => {
@@ -1200,7 +1214,7 @@ private updateVegetation(time: number, deltaTime: number) {
             zone.vegetationDensity = this.calculateVegetationDensity(zone.position, layer);
             
             // Notify vegetation system of changes
-            this.vegetationSystem.updateZone(zone);
+            this.vegetation.updateZone(zone);
         });
     });
 }

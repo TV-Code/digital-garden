@@ -1,8 +1,9 @@
 import { TreeStyle, PlantDefinition, PlantType } from '../../types/environment/vegetation';
 import { HSLColor } from '../../utils/colors';
+import { TreeStyleType } from '../../types/environment/vegetation';
 
 
-export const TREE_STYLES: Record<string, TreeStyle> = {
+export const TREE_STYLES: Record<TreeStyleType, TreeStyle> = {
     MAPLE: {
         trunk: {
             color: [25, 30, 30] as HSLColor,
@@ -32,29 +33,28 @@ export const TREE_STYLES: Record<string, TreeStyle> = {
     },
     WHITE_BIRCH: {
         trunk: {
-            color: [40, 5, 95] as HSLColor,
-            width: 0.045,
+            color: [0, 0, 95] as HSLColor, // Pure white
+            width: 0.08, // Thicker trunk
             taper: 0.92,
-            markings: [0, 0, 15] as HSLColor,
-            markingDensity: 1.5,
-            bark: {
-                roughness: 0.3,
+            markings: {
+                density: 2,
+                roughness: 0.4,
                 pattern: 'peeling',
                 colorVariation: 0.1
             }
         },
         foliage: {
             colors: [
-                [60, 70, 55] as HSLColor,  // Yellow-green
-                [80, 65, 50] as HSLColor,  // Fresh green
-                [90, 60, 45] as HSLColor   // Deep green
+                [0, 85, 50] as HSLColor,   // Bright red
+                [5, 80, 45] as HSLColor,   // Deep red
+                [10, 75, 40] as HSLColor   // Dark red
             ],
-            shape: 'wispy',
-            density: 0.9,
-            size: 1.1,
+            shape: 'layered',
+            density: 1.2,
+            size: 1.4,
             animation: {
-                swayAmount: 0.4,
-                swaySpeed: 0.9
+                swayAmount: 0.2,
+                swaySpeed: 0.6
             }
         }
     },
@@ -112,77 +112,76 @@ export const TREE_STYLES: Record<string, TreeStyle> = {
             }
         }
     }
-};
+} as const;
 
 export const PLANT_TYPES: Record<PlantType, PlantDefinition> = {
     tree: {
         type: 'tree',
         size: {
-            min: 80,
-            max: 120
+            min: 100,  // Increased minimum size
+            max: 150   // Increased maximum size
         },
-        density: 0.3,
+        density: 0.08,  // Slightly increased density
         conditions: {
             minSlope: 0,
-            maxSlope: 0.4,
-            minMoisture: 0.2,
-            preferredLight: 0.8,
-            soilTypes: ['fertile', 'clay']
+            maxSlope: 0.6,  // More tolerant of slopes
+            minMoisture: 0.1,  // Less demanding of moisture
+            preferredLight: 0.8
         }
     },
     bush: {
         type: 'bush',
         size: {
-            min: 30,
-            max: 50
+            min: 40,
+            max: 70
         },
-        density: 0.5,
+        density: 0.05,
         conditions: {
             minSlope: 0,
-            maxSlope: 0.6,
-            minMoisture: 0.3,
+            maxSlope: 0.7,
+            minMoisture: 0.2,
             preferredLight: 0.6
         }
     },
     flower: {
         type: 'flower',
         size: {
-            min: 10,
-            max: 20
+            min: 15,
+            max: 30
         },
-        density: 0.7,
+        density: 0.03,
         conditions: {
             minSlope: 0,
-            maxSlope: 0.3,
-            minMoisture: 0.4,
+            maxSlope: 0.4,
+            minMoisture: 0.3,
             preferredLight: 0.9
         }
     },
     grass: {
         type: 'grass',
         size: {
-            min: 5,
-            max: 15
+            min: 10,
+            max: 25
         },
-        density: 0.8,
+        density: 0.04,
         conditions: {
             minSlope: 0,
-            maxSlope: 0.5,
-            minMoisture: 0.2,
+            maxSlope: 0.6,
+            minMoisture: 0.1,
             preferredLight: 0.7
         }
     },
     fern: {
         type: 'fern',
         size: {
-            min: 15,
-            max: 30
+            min: 20,
+            max: 40
         },
-        density: 0.4,
+        density: 0.02,
         conditions: {
             minSlope: 0,
-            maxSlope: 0.4,
-            minMoisture: 0.6,
+            maxSlope: 0.5,
+            minMoisture: 0.4,
             preferredLight: 0.3
         }
     }

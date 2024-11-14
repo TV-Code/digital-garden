@@ -136,42 +136,42 @@ export const ColorSystem = {
     } as Record<TimeOfDay, TimeColors>,
 
     createGradientColors(baseColor: HSLColor, count: number = 5, options = {
-      darken: true,
-      alpha: 1
-  }): string[] {
-      return Array.from({ length: count }, (_, i) => {
-          const t = i / (count - 1);
-          const brightnessShift = options.darken ? -20 * t : 20 * t;
-          return this.toHSLString(
-              [
-                  baseColor[0],
-                  baseColor[1],
-                  this.clampValue(baseColor[2] + brightnessShift, 0, 100)
-              ],
-              options.alpha
-          );
-      });
-  },
+        darken: true,
+        alpha: 1
+    }): string[] {
+        return Array.from({ length: count }, (_, i) => {
+            const t = i / (count - 1);
+            const brightnessShift = options.darken ? -20 * t : 20 * t;
+            return this.toHSLString(
+                [
+                    baseColor[0],
+                    baseColor[1],
+                    this.clampValue(baseColor[2] + brightnessShift, 0, 100)
+                ],
+                options.alpha
+            );
+        });
+    },
 
-  toHSLString(color: HSLColor, alpha: number = 1): string {
-      return `hsla(${color[0]}, ${color[1]}%, ${color[2]}%, ${alpha})`;
-  },
+    toHSLString(color: HSLColor, alpha: number = 1): string {
+        return `hsla(${color[0]}, ${color[1]}%, ${color[2]}%, ${alpha})`;
+    },
 
-  clampValue(value: number, min: number, max: number): number {
-      if (isNaN(value)) return min;
-      return Math.max(min, Math.min(max, value));
-  },
+    clampValue(value: number, min: number, max: number): number {
+        if (isNaN(value)) return min;
+        return Math.max(min, Math.min(max, value));
+    },
 
-  createGradientColor(color: HSLColor, opacity: number = 1, lightness: number = 0): string {
-      return this.toHSLString(
-          [
-              color[0],
-              color[1],
-              this.clampValue(color[2] + lightness, 0, 100)
-          ],
-          opacity
-      );
-  },
+    createGradientColor(color: HSLColor, opacity: number = 1, lightness: number = 0): string {
+        return this.toHSLString(
+            [
+                color[0],
+                color[1],
+                this.clampValue(color[2] + lightness, 0, 100)
+            ],
+            opacity
+        );
+    },
 
   lerp(a: number, b: number, t: number): number {
     return a + (b - a) * t;

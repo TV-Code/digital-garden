@@ -12,6 +12,7 @@ import {
     ErosionPattern,
     VegetationZone
 } from '../../../types/environment/terrain';
+import { PlantType } from '../../../types/environment/vegetation';
 
 export class TerrainSystem {
     private layers: TerrainLayer[] = [];
@@ -21,6 +22,7 @@ export class TerrainSystem {
     private staticCtx: OffscreenCanvasRenderingContext2D;
     private renderer: TerrainRenderer;
     public vegetation: VegetationSystem;
+    private isInitialized: boolean = false;
     
     private readonly TERRAIN_PARAMS = {
         mountainHeight: 0.8,
@@ -47,6 +49,11 @@ export class TerrainSystem {
         
         // Generate initial terrain
         this.generateTerrain();
+
+        if (!this.isInitialized) {
+            this.initializeVegetation();
+            this.isInitialized = true;
+        }
     }
 
     public drawTerrain(ctx: CanvasRenderingContext2D, time: number, lighting: any) {
@@ -60,10 +67,20 @@ export class TerrainSystem {
         ctx.restore();
     }
 
-    public draw(ctx: CanvasRenderingContext2D, time: number, lighting: any) {
-        this.drawTerrain(ctx, time, lighting);
+    draw(ctx: CanvasRenderingContext2D, time: number, lighting: any) {
+        // Draw static terrain
+        ctx.drawImage(this.staticBuffer, 0, 0);
+        
+        // Draw dynamic terrain layers
+        this.layers.forEach(layer => {
+            this.renderer.drawLayer(ctx, layer, time, lighting);
+        });
+    
+        // Draw vegetation AFTER terrain
+        console.log("Drawing vegetation, plant count:", this.vegetation.getPlants().length); // Debug log
         this.vegetation.draw(ctx, time);
     }
+    
 
     public update(time: number, deltaTime: number) {
         // Update terrain
@@ -90,6 +107,50 @@ export class TerrainSystem {
         // Generate static elements
         this.renderStaticElements();
     }
+
+    // In TerrainSystem.ts
+//In TerrainSystem.ts - completely replace the initializeVegetation method:
+
+private initializeVegetation(): void {
+    // Clear any existing vegetation first
+    this.vegetation.clear();
+
+    // Just add exactly the number we want
+    const addExactPlants = (count: number, type: PlantType, style: string, slopeLimit: number = 0.8) => {
+        for (let i = 0; i < count; i++) {
+            let attempts = 0;
+            const maxAttempts = 50;
+
+            while (attempts < maxAttempts) {
+                const x = Math.random() * this.width;
+                const y = this.waterLevel + Math.random() * (this.height - this.waterLevel);
+                const terrainInfo = this.getTerrainInfoAt(x, y);
+                
+                if (terrainInfo.height > 0 && terrainInfo.slope < slopeLimit) {
+                    this.vegetation.addPlant({
+                        type,
+                        style,
+                        position: { x, y },
+                        sizeScale: 0.8 + Math.random() * 0.4
+                    });
+                    break;
+                }
+                attempts++;
+            }
+        }
+    };
+
+    // Add exactly the number of each type we want
+    addExactPlants(2, 'tree', 'COASTAL_PINE', 0.8);
+    addExactPlants(2, 'tree', 'CLIFF_TREE', 0.8);
+    addExactPlants(2, 'tree', 'WINDSWEPT_TREE', 0.8);
+    addExactPlants(6, 'bush', 'flowering_bush', 0.6);
+    addExactPlants(8, 'flower', 'coastal_bloom', 0.4);
+    addExactPlants(10, 'grass', 'coastal_grass', 0.5);
+    addExactPlants(6, 'fern', 'coastal_fern', 0.4);
+
+    console.log("Final vegetation count:", this.vegetation.getPlants().length);
+}
 
     private generateHeightmap(): number[][] {
         const resolution = 100; // Higher resolution for more detail
@@ -1200,24 +1261,13 @@ private updateErosion(deltaTime: number) {
     });
 }
 
-private updateVegetation(time: number, deltaTime: number) {
-    this.vegetation.update(time, deltaTime);
-    
-    // Update vegetation zones
-    this.layers.forEach(layer => {
-        layer.vegetationZones.forEach(zone => {
-            // Update moisture levels based on time
-            zone.moisture = this.calculateMoistureAt(zone.position.x, layer.elevation) *
-                          (0.8 + Math.sin(time * 0.001) * 0.2);
-            
-            // Update vegetation density
-            zone.vegetationDensity = this.calculateVegetationDensity(zone.position, layer);
-            
-            // Notify vegetation system of changes
-            this.vegetation.updateZone(zone);
-        });
-    });
-}
+// updateVegetation(time: number, deltaTime: number): void {
+//     this.vegetation.update(time, deltaTime);
+// }
+
+// drawVegetation(ctx: CanvasRenderingContext2D, time: number): void {
+//     this.vegetation.draw(ctx, time);
+// }
 
 private drawFeature(ctx: CanvasRenderingContext2D, feature: TerrainFeature, time: number, lighting: any) {
     // Draw base feature shape

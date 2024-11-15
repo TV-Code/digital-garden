@@ -4,7 +4,34 @@ import { Vector2 } from '../index';
 // Core Plant Types
 export type PlantType = 'tree' | 'bush' | 'flower' | 'grass' | 'fern';
 export type SoilType = 'rocky' | 'fertile' | 'sandy' | 'clay';
-export type TreeStyleType = 'WHITE_BIRCH' | 'MAPLE' | 'WEEPING_WILLOW' | 'SAKURA';
+export type TreeStyleType = 
+    | 'COASTAL_PINE' 
+    | 'WINDSWEPT_TREE' 
+    | 'CLIFF_TREE';
+
+export interface TreeStyle {
+    trunk: {
+        color: HSLColor;
+        width: number;
+        taper: number;
+        bend?: number;
+        twist?: number;
+        texture?: 'smooth' | 'rough' | 'bark' | 'striated';
+    };
+    foliage: {
+        colors: HSLColor[];
+        shape: FoliageShape;
+        density: number;
+        size: number;
+        texture?: 'smooth' | 'detailed' | 'complex';
+    };
+    animation?: {
+        swayAmount: number;
+        swaySpeed: number;
+        growth: number;
+        phase: number;
+    };
+}
 
 // Plant Growth and Conditions
 export interface PlantDefinition {
@@ -78,7 +105,9 @@ export type FoliageShape =
     | 'weeping' 
     | 'columnar'
     | 'vase'
-    | 'irregular';
+    | 'irregular'
+    | 'layered'
+    | 'cloud';
 
 export interface FoliageStyle {
     colors: HSLColor[];

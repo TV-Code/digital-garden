@@ -173,15 +173,21 @@ export const useSanctuary = () => {
     };
 
     const updateAndDrawTerrain = (
-        ctx: CanvasRenderingContext2D, 
-        time: number, 
-        deltaTime: number, 
-        lighting: any
-    ) => {
-        systems.current.terrain?.update(time, deltaTime);
-        systems.current.terrain?.draw(ctx, time, lighting);
-        systems.current.atmosphere?.draw(ctx, time);
-    };
+      ctx: CanvasRenderingContext2D, 
+      time: number, 
+      deltaTime: number, 
+      lighting: any
+  ) => {
+      const terrain = systems.current.terrain;
+      if (!terrain) return;
+  
+      // Update and draw base terrain
+      terrain.update(time, deltaTime);
+      terrain.draw(ctx, time, lighting);
+  
+      // Draw atmospheric effects last
+      systems.current.atmosphere?.draw(ctx, time);
+  };
 
     const cleanup = useCallback(() => {
         // Cleanup system resources if needed

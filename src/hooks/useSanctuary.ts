@@ -4,6 +4,7 @@ import { TerrainSystem } from '../systems/environment/core/TerrainSystem';
 import { WaterSystem } from '../systems/environment/core/WaterSystem';
 import { MountainRange } from '../systems/environment/features/MountainRange';
 import { AtmosphericSystem } from '../systems/environment/core/AtmosphericSystem';
+import { VegetationSystem } from '../systems/environment/core/VegetationSystem';
 import { ColorSystem, ColorBridge } from '../utils/colors';
 
 interface Systems {
@@ -12,6 +13,7 @@ interface Systems {
     water: WaterSystem | null;
     mountains: MountainRange[];
     atmosphere: AtmosphericSystem | null;
+    vegetation: VegetationSystem | null;
 }
 
 export const useSanctuary = () => {
@@ -20,7 +22,8 @@ export const useSanctuary = () => {
         terrain: null,
         water: null,
         mountains: [],
-        atmosphere: null
+        atmosphere: null,
+        vegetation: null,
     });
 
     const timeRef = useRef<number>(0);
@@ -35,6 +38,7 @@ export const useSanctuary = () => {
             terrain: new TerrainSystem(width, height, waterLevel),
             water: new WaterSystem(waterLevel, width, height),
             atmosphere: new AtmosphericSystem(width, height, waterLevel),
+            vegetation: new VegetationSystem(width, height, waterLevel),
             mountains: [
                 // Enhanced mountain positioning and layering
                 ...generateMountainRanges(width, height)
@@ -82,6 +86,11 @@ export const useSanctuary = () => {
 
         // Update and draw terrain and atmosphere
         updateAndDrawTerrain(ctx, timeRef.current, deltaTime, currentLighting);
+
+        if (systems.current.vegetation) {
+            systems.current.vegetation.update(time, deltaTime);
+            systems.current.vegetation.draw(ctx, time);
+        }
     }, []);
 
     // Helper functions for rendering different parts of the scene
@@ -197,8 +206,13 @@ export const useSanctuary = () => {
         const waterLevel = canvasHeight * 0.55;
         if (y > waterLevel) {
             systems.current.water?.addRipple(x, y);
+        } else {
+            // Plant a tree if clicked above water
+            systems.current.vegetation?.plantTreeAtPosition({ x, y });
         }
     }, []);
+
+    
 
     return {
         initializeSystems,

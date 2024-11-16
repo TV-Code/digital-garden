@@ -1,5 +1,4 @@
 import { createNoise2D, createNoise3D } from 'simplex-noise';
-import { VegetationSystem } from './VegetationSystem';
 import { TerrainRenderer } from '../rendering/TerrainRenderer';
 import { ColorSystem, ColorBridge, HSLColor } from '../../../utils/colors';
 import { TerrainConfig } from '../../../configs/environment/terrainConfig';
@@ -21,15 +20,12 @@ export class TerrainSystem {
     private staticBuffer: OffscreenCanvas;
     private staticCtx: OffscreenCanvasRenderingContext2D;
     private renderer: TerrainRenderer;
-    public vegetation: VegetationSystem;
-    private isInitialized: boolean = false;
     
     private readonly TERRAIN_PARAMS = {
         mountainHeight: 0.8,
         valleyDepth: 0.4,
         cliffSteepness: 0.85,
         erosionStrength: 0.6,
-        vegetationDensity: 0.7,
     };
 
     constructor(
@@ -39,7 +35,6 @@ export class TerrainSystem {
     ) {
         this.noise2D = createNoise2D();
         this.noise3D = createNoise3D();
-        this.vegetation = new VegetationSystem(width, height, waterLevel);
 
         this.renderer = new TerrainRenderer(width, height);
         
@@ -49,11 +44,6 @@ export class TerrainSystem {
         
         // Generate initial terrain
         this.generateTerrain();
-
-        if (!this.isInitialized) {
-            this.initializeVegetation();
-            this.isInitialized = true;
-        }
     }
 
     public drawTerrain(ctx: CanvasRenderingContext2D, time: number, lighting: any) {
@@ -76,9 +66,6 @@ export class TerrainSystem {
             this.renderer.drawLayer(ctx, layer, time, lighting);
         });
     
-        // Draw vegetation AFTER terrain
-        console.log("Drawing vegetation, plant count:", this.vegetation.getPlants().length); // Debug log
-        this.vegetation.draw(ctx, time);
     }
     
 
@@ -87,8 +74,6 @@ export class TerrainSystem {
         this.updateErosion(deltaTime);
         this.updateColors(time);
         
-        // Update vegetation
-        this.vegetation.update(time, deltaTime);
     }
 
     private generateTerrain() {
@@ -101,56 +86,12 @@ export class TerrainSystem {
         // Add geological features to each layer
         this.layers.forEach(layer => {
             layer.features = this.generateFeatures(layer);
-            layer.vegetationZones = this.generateVegetationZones(layer);
         });
         
         // Generate static elements
         this.renderStaticElements();
     }
 
-    // In TerrainSystem.ts
-//In TerrainSystem.ts - completely replace the initializeVegetation method:
-
-private initializeVegetation(): void {
-    // Clear any existing vegetation first
-    this.vegetation.clear();
-
-    // Just add exactly the number we want
-    const addExactPlants = (count: number, type: PlantType, style: string, slopeLimit: number = 0.8) => {
-        for (let i = 0; i < count; i++) {
-            let attempts = 0;
-            const maxAttempts = 50;
-
-            while (attempts < maxAttempts) {
-                const x = Math.random() * this.width;
-                const y = this.waterLevel + Math.random() * (this.height - this.waterLevel);
-                const terrainInfo = this.getTerrainInfoAt(x, y);
-                
-                if (terrainInfo.height > 0 && terrainInfo.slope < slopeLimit) {
-                    this.vegetation.addPlant({
-                        type,
-                        style,
-                        position: { x, y },
-                        sizeScale: 0.8 + Math.random() * 0.4
-                    });
-                    break;
-                }
-                attempts++;
-            }
-        }
-    };
-
-    // Add exactly the number of each type we want
-    addExactPlants(2, 'tree', 'COASTAL_PINE', 0.8);
-    addExactPlants(2, 'tree', 'CLIFF_TREE', 0.8);
-    addExactPlants(2, 'tree', 'WINDSWEPT_TREE', 0.8);
-    addExactPlants(6, 'bush', 'flowering_bush', 0.6);
-    addExactPlants(8, 'flower', 'coastal_bloom', 0.4);
-    addExactPlants(10, 'grass', 'coastal_grass', 0.5);
-    addExactPlants(6, 'fern', 'coastal_fern', 0.4);
-
-    console.log("Final vegetation count:", this.vegetation.getPlants().length);
-}
 
     private generateHeightmap(): number[][] {
         const resolution = 100; // Higher resolution for more detail

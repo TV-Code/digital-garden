@@ -9,27 +9,60 @@ export type TreeStyleType =
     | 'WINDSWEPT_TREE' 
     | 'CLIFF_TREE';
 
+export interface CurvePoint {
+    position: Vector2;
+    control1?: Vector2;
+    control2?: Vector2;
+}
+
 export interface TreeStyle {
-    trunk: {
-        color: HSLColor;
-        width: number;
-        taper: number;
-        bend?: number;
-        twist?: number;
-        texture?: 'smooth' | 'rough' | 'bark' | 'striated';
-    };
-    foliage: {
-        colors: HSLColor[];
-        shape: FoliageShape;
+    branchingPattern: 'upright' | 'weeping' | 'spreading';
+    growthShape: 'conical' | 'rounded' | 'columnar' | 'umbrella';
+    foliageStyle: {
+        type: 'needles' | 'leaves' | 'clustered' | 'cloud' | 'layered';
         density: number;
         size: number;
-        texture?: 'smooth' | 'detailed' | 'complex';
+        color: HSLColor;
+        layerCount: number;
+        detail?: {
+            bubbleSize?: number;
+            variance?: number;
+            overlap?: number;
+            layers?: number;
+            roundness?: number;
+            layerSpread?: number;
+            canopyDepth?: number;
+            edgeDetail?: number;
+            gapFrequency?: number;
+        };
     };
-    animation?: {
+    trunkStyle: {
+        color: HSLColor;
+        baseWidth: number;
+        taper: number;
+        barkDetail: number;
+        markings?: {
+            color: HSLColor;
+            frequency: number;
+            size: number;
+            variance: number;
+        };
+        branchSpread?: {
+            angle: number;
+            variance: number;
+            distribution: 'even' | 'weighted-top' | 'weighted-bottom';
+        };
+        curvature?: number;
+    };
+    animation: {
         swayAmount: number;
         swaySpeed: number;
-        growth: number;
-        phase: number;
+        leafRustleAmount?: number;
+        leafRustleSpeed?: number;
+        bubbleWobbleAmount?: number;
+        bubbleWobbleSpeed?: number;
+        canopyWaveAmount?: number;
+        canopyWaveSpeed?: number;
     };
 }
 
@@ -98,6 +131,30 @@ export interface TrunkStyle {
     texture?: 'smooth' | 'rough' | 'bark' | 'striated';
 }
 
+export interface FoliageCluster {
+    position: Vector2;
+    size: number;
+    growth: number;
+    angle: number;
+    path?: Path2D;
+}
+
+export interface Branch {
+    points: CurvePoint[];
+    width: number;
+    growth: number;
+    children: Branch[];
+    foliage: FoliageCluster[];
+}
+
+export interface Tree {
+    position: Vector2;
+    style: TreeStyle;
+    trunk: Branch;
+    growth: number;
+    age: number;
+}
+
 export type FoliageShape = 
     | 'rounded' 
     | 'conical' 
@@ -115,6 +172,30 @@ export interface FoliageStyle {
     density: number;
     size: number;
     texture?: 'smooth' | 'detailed' | 'complex';
+}
+
+export interface FoliageCluster {
+    position: Vector2;
+    size: number;
+    growth: number;
+    angle: number;
+    path?: Path2D;
+}
+
+export interface Branch {
+    points: CurvePoint[];
+    width: number;
+    growth: number;
+    children: Branch[];
+    foliage: FoliageCluster[];
+}
+
+export interface Tree {
+    position: Vector2;
+    style: TreeStyle;
+    trunk: Branch;
+    growth: number;
+    age: number;
 }
 
 // Animation and Seasonal Effects
@@ -211,10 +292,15 @@ export interface BarkStyle {
 }
 
 export interface FoliageDetail {
-    layerCount: number;
-    density: number;
-    shape: FoliageShape;
-    textureDetail: number;
+    bubbleSize?: number;
+    variance?: number;
+    overlap?: number;
+    layers?: number;
+    roundness?: number;
+    layerSpread?: number;
+    canopyDepth?: number;
+    edgeDetail?: number;
+    gapFrequency?: number;
 }
 
 export interface BranchingPattern {

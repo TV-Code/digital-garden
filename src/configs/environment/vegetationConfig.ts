@@ -2,86 +2,145 @@ import { TreeStyle, PlantDefinition, PlantType, TreeStyleType,
     FoliageShape, PlantStyle, SeasonalStyle } from '../../types/environment/vegetation';
 import { HSLColor } from '../../utils/colors';
 
-export const TREE_STYLES: Record<TreeStyleType, TreeStyle> = {
-    COASTAL_PINE: {
-        trunk: {
-            color: [25, 20, 15] as HSLColor, // Darker, more muted trunk
-            width: 0.035, // Thinner trunk
-            taper: 0.95,  // More gradual taper
-            bend: 0.15,   // Subtle bend
-            texture: 'smooth', // Clean aesthetic
+export const TREE_STYLES: Record<string, TreeStyle> = {
+    WHITE_BIRCH: {
+        branchingPattern: 'upright',
+        growthShape: 'rounded',
+        foliageStyle: {
+            type: 'clustered',
+            density: 1.4,
+            size: 35,
+            color: [15, 85, 65] as HSLColor, // Warm coral/orange
+            layerCount: 4,
+            detail: {
+                bubbleSize: 12,
+                variance: 0.3,
+                overlap: 0.4
+            }
         },
-        foliage: {
-            colors: [
-                [160, 25, 15] as HSLColor,  // Dark silhouette base
-                [165, 20, 20] as HSLColor,  // Subtle midtone
-                [170, 15, 25] as HSLColor   // Highlight for depth
-            ],
-            shape: 'rounded',    // Bubble-like shape
-            density: 1.4,        // Dense foliage
-            size: 1.3,          // Larger size
-            texture: 'smooth'    // Clean edges
+        trunkStyle: {
+            color: [0, 0, 95] as HSLColor, // Almost white
+            baseWidth: 14,
+            taper: 0.75,
+            barkDetail: 0.8,
+            markings: {
+                color: [0, 0, 20] as HSLColor, // Dark grey
+                frequency: 0.4,
+                size: 8,
+                variance: 0.3
+            }
         },
         animation: {
-            swayAmount: 0.15,    // Subtle movement
-            swaySpeed: 0.4,      // Slower, more graceful
-            growth: 1.0,
-            phase: 0
+            swayAmount: 0.3,
+            swaySpeed: 0.8,
+            leafRustleAmount: 0.4,
+            leafRustleSpeed: 1.2
         }
     },
-    WINDSWEPT_TREE: {
-        trunk: {
-            color: [20, 25, 20] as HSLColor,
-            width: 0.03,
-            taper: 0.92,
-            bend: 0.25,
-            texture: 'smooth'
+
+    BUBBLE_PINE: {
+        branchingPattern: 'upright',
+        growthShape: 'conical',
+        foliageStyle: {
+            type: 'cloud',
+            density: 1.6,
+            size: 40,
+            color: [175, 45, 35] as HSLColor, // Blue-green
+            layerCount: 5,
+            detail: {
+                bubbleSize: 15,
+                variance: 0.2,
+                overlap: 0.5,
+                layers: 3,
+                roundness: 0.9
+            }
         },
-        foliage: {
-            colors: [
-                [155, 20, 15] as HSLColor,  // Darker base
-                [160, 15, 20] as HSLColor,  // Subtle variation
-                [165, 10, 25] as HSLColor   // Minimal highlight
-            ],
-            shape: 'cloud',      // Organic cloud-like shape
-            density: 1.5,        // Very dense
-            size: 1.2,          // Good presence
-            texture: 'smooth'
+        trunkStyle: {
+            color: [200, 15, 25] as HSLColor, // Dark blue-grey
+            baseWidth: 16,
+            taper: 0.8,
+            barkDetail: 0.5,
+            curvature: 0.2
         },
         animation: {
             swayAmount: 0.2,
-            swaySpeed: 0.5,
-            growth: 1.0,
-            phase: 0
+            swaySpeed: 0.6,
+            bubbleWobbleAmount: 0.15,
+            bubbleWobbleSpeed: 0.9
         }
     },
-    CLIFF_TREE: {
-        trunk: {
-            color: [15, 20, 15] as HSLColor,
-            width: 0.025,
-            taper: 0.96,
-            bend: 0.2,
-            texture: 'smooth'
+
+    SAVANNA_TREE: {
+        branchingPattern: 'spreading',
+        growthShape: 'umbrella',
+        foliageStyle: {
+            type: 'layered',
+            density: 1.2,
+            size: 45,
+            color: [85, 40, 40] as HSLColor, // Warm green
+            layerCount: 3,
+            detail: {
+                layerSpread: 0.7,
+                canopyDepth: 0.4,
+                edgeDetail: 0.6,
+                gapFrequency: 0.3
+            }
         },
-        foliage: {
-            colors: [
-                [150, 15, 10] as HSLColor,  // Very dark base
-                [155, 10, 15] as HSLColor,  // Minimal variation
-                [160, 5, 20] as HSLColor    // Subtle highlight
-            ],
-            shape: 'layered',    // Horizontal layering
-            density: 1.6,        // Very dense
-            size: 1.1,          // Balanced size
-            texture: 'smooth'
+        trunkStyle: {
+            color: [30, 35, 30] as HSLColor, // Warm brown
+            baseWidth: 18,
+            taper: 0.7,
+            barkDetail: 0.6,
+            branchSpread: {
+                angle: 0.6,
+                variance: 0.3,
+                distribution: 'weighted-top'
+            }
         },
         animation: {
-            swayAmount: 0.1,     // Minimal movement
-            swaySpeed: 0.3,      // Slow and steady
-            growth: 1.0,
-            phase: 0
+            swayAmount: 0.25,
+            swaySpeed: 0.7,
+            canopyWaveAmount: 0.3,
+            canopyWaveSpeed: 0.8
         }
     }
 };
+
+export interface FoliageDetail {
+    bubbleSize?: number;
+    variance?: number;
+    overlap?: number;
+    layers?: number;
+    roundness?: number;
+    layerSpread?: number;
+    canopyDepth?: number;
+    edgeDetail?: number;
+    gapFrequency?: number;
+}
+
+export interface BranchSpread {
+    angle: number;
+    variance: number;
+    distribution: 'even' | 'weighted-top' | 'weighted-bottom';
+}
+
+export interface BarkMarkings {
+    color: HSLColor;
+    frequency: number;
+    size: number;
+    variance: number;
+}
+
+export interface TreeAnimation {
+    swayAmount: number;
+    swaySpeed: number;
+    leafRustleAmount?: number;
+    leafRustleSpeed?: number;
+    bubbleWobbleAmount?: number;
+    bubbleWobbleSpeed?: number;
+    canopyWaveAmount?: number;
+    canopyWaveSpeed?: number;
+}
 
 export const PLANT_TYPES: Record<PlantType, PlantDefinition> = {
 tree: {

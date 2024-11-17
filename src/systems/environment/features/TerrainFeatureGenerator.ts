@@ -2,8 +2,8 @@ import { createNoise2D } from 'simplex-noise';
 import { 
     TerrainFeature, TerrainLayer, Vector2, 
     RockFormation, ErosionPattern 
-} from '../../types/environment/terrain';
-import { TerrainConfig } from '../../configs/environment/terrainConfig';
+} from '../../../types/environment/terrain';
+import { TerrainConfig } from '../../../configs/environment/terrainConfig';
 import { ColorSystem, ColorBridge, HSLColor } from '../../utils/colors';
 
 interface FeatureParams {

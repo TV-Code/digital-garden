@@ -31,10 +31,10 @@ export const TREE_STYLES: Record<string, TreeStyle> = {
             }
         },
         animation: {
-            swayAmount: 0.3,
-            swaySpeed: 0.8,
-            leafRustleAmount: 0.4,
-            leafRustleSpeed: 1.2
+            swayAmount: 0.001,
+            swaySpeed: 0.001,
+            leafRustleAmount: 0.002,
+            leafRustleSpeed: 0.001
         }
     },
 
@@ -57,16 +57,16 @@ export const TREE_STYLES: Record<string, TreeStyle> = {
         },
         trunkStyle: {
             color: [200, 15, 25] as HSLColor, // Dark blue-grey
-            baseWidth: 16,
+            baseWidth: 10,
             taper: 0.8,
             barkDetail: 0.5,
             curvature: 0.2
         },
         animation: {
-            swayAmount: 0.2,
-            swaySpeed: 0.6,
-            bubbleWobbleAmount: 0.15,
-            bubbleWobbleSpeed: 0.9
+            swayAmount: 0.002,
+            swaySpeed: 0.001,
+            bubbleWobbleAmount: 0.001,
+            bubbleWobbleSpeed: 0.0005
         }
     },
 
@@ -88,7 +88,7 @@ export const TREE_STYLES: Record<string, TreeStyle> = {
         },
         trunkStyle: {
             color: [30, 35, 30] as HSLColor, // Warm brown
-            baseWidth: 18,
+            baseWidth: 10,
             taper: 0.7,
             barkDetail: 0.6,
             branchSpread: {
@@ -99,9 +99,9 @@ export const TREE_STYLES: Record<string, TreeStyle> = {
         },
         animation: {
             swayAmount: 0.25,
-            swaySpeed: 0.7,
-            canopyWaveAmount: 0.3,
-            canopyWaveSpeed: 0.8
+            swaySpeed: 0.01,
+            canopyWaveAmount: 0.01,
+            canopyWaveSpeed: 0.01
         }
     }
 };

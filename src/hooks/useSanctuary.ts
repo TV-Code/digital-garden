@@ -1,6 +1,7 @@
 import { useRef, useCallback } from 'react';
 import { LightingSystem } from '../systems/environment/lighting';
 import { TerrainSystem } from '../systems/environment/core/TerrainSystem';
+import { TerrainRenderer } from '../systems/environment';
 import { WaterSystem } from '../systems/environment/core/WaterSystem';
 import { MountainRange } from '../systems/environment/features/MountainRange';
 import { AtmosphericSystem } from '../systems/environment/core/AtmosphericSystem';
@@ -10,16 +11,19 @@ import { ColorSystem, ColorBridge } from '../utils/colors';
 interface Systems {
     lighting: LightingSystem | null;
     terrain: TerrainSystem | null;
+    terrainRenderer: TerrainRenderer | null;
     water: WaterSystem | null;
     mountains: MountainRange[];
     atmosphere: AtmosphericSystem | null;
     vegetation: VegetationSystem | null;
 }
 
+
 export const useSanctuary = () => {
     const systems = useRef<Systems>({
         lighting: null,
         terrain: null,
+        terrainRenderer: null,
         water: null,
         mountains: [],
         atmosphere: null,
@@ -33,17 +37,27 @@ export const useSanctuary = () => {
         const { width, height } = canvas;
         const waterLevel = height * 0.55;
         
+        const terrainOptions = {
+            resolution: 100,
+            octaves: 6,
+            persistence: 0.5,
+            lacunarity: 2.0,
+            baseFrequency: 0.005,
+            erosionStrength: 0.6,
+            smoothingPasses: 2
+        };
+        
         systems.current = {
             lighting: new LightingSystem(),
             terrain: new TerrainSystem(width, height, waterLevel),
+            terrainRenderer: new TerrainRenderer(),
             water: new WaterSystem(waterLevel, width, height),
             atmosphere: new AtmosphericSystem(width, height, waterLevel),
             vegetation: new VegetationSystem(width, height, waterLevel),
-            mountains: [
-                // Enhanced mountain positioning and layering
-                ...generateMountainRanges(width, height)
-            ]
+            mountains: generateMountainRanges(width, height)
         };
+
+        systems.current.terrain.initializeComposition();
     }, []);
 
     const generateMountainRanges = (width: number, height: number): MountainRange[] => {
@@ -62,36 +76,40 @@ export const useSanctuary = () => {
       ];
   };
 
-    const renderFrame = useCallback((ctx: CanvasRenderingContext2D, time: number) => {
-        const deltaTime = lastFrameTimeRef.current ? time - lastFrameTimeRef.current : 0;
-        lastFrameTimeRef.current = time;
-        timeRef.current = time * 0.001;
+  const renderFrame = useCallback((ctx: CanvasRenderingContext2D, time: number) => {
+    const deltaTime = lastFrameTimeRef.current ? time - lastFrameTimeRef.current : 0;
+    lastFrameTimeRef.current = time;
+    timeRef.current = time * 0.001;
 
-        const { width, height } = ctx.canvas;
-        
-        // Update lighting with improved timing
-        systems.current.lighting?.updateColors(timeRef.current);
-        const currentLighting = systems.current.lighting?.getCurrentLighting();
-        if (!currentLighting) return;
+    const { width, height } = ctx.canvas;
+    
+    // Update lighting
+    systems.current.lighting?.updateColors(timeRef.current);
+    const currentLighting = systems.current.lighting?.getCurrentLighting();
+    if (!currentLighting) return;
 
-        // Clear and draw sky gradient
-        ctx.clearRect(0, 0, width, height);
-        drawSky(ctx, currentLighting.sky, height);
+    // Clear canvas and draw sky
+    ctx.clearRect(0, 0, width, height);
+    drawSky(ctx, currentLighting.sky, height);
 
-        // Draw mountain ranges with improved layering
-        drawMountainLayers(ctx, width, height, currentLighting);
+    // Draw mountain ranges
+    drawMountainLayers(ctx, width, height, currentLighting);
 
-        // Draw water system with enhanced reflections
-        drawWaterSystem(ctx, timeRef.current);
+    // Draw water system with reflections
+    drawWaterSystem(ctx, timeRef.current);
 
-        // Update and draw terrain and atmosphere
-        updateAndDrawTerrain(ctx, timeRef.current, deltaTime, currentLighting);
+    // Update and draw terrain
+    updateAndDrawTerrain(ctx, timeRef.current, deltaTime, currentLighting);
 
-        if (systems.current.vegetation) {
-            systems.current.vegetation.update(time, deltaTime);
-            systems.current.vegetation.draw(ctx, time);
-        }
-    }, []);
+    // Update and draw vegetation
+    if (systems.current.vegetation) {
+        systems.current.vegetation.update(time, deltaTime);
+        systems.current.vegetation.draw(ctx, time);
+    }
+
+    // Draw atmospheric effects last
+    systems.current.atmosphere?.draw(ctx, time);
+}, []);
 
     // Helper functions for rendering different parts of the scene
     const drawSky = (ctx: CanvasRenderingContext2D, sky: any, height: number) => {
@@ -182,21 +200,20 @@ export const useSanctuary = () => {
     };
 
     const updateAndDrawTerrain = (
-      ctx: CanvasRenderingContext2D, 
-      time: number, 
-      deltaTime: number, 
-      lighting: any
-  ) => {
-      const terrain = systems.current.terrain;
-      if (!terrain) return;
-  
-      // Update and draw base terrain
-      terrain.update(time, deltaTime);
-      terrain.draw(ctx, time, lighting);
-  
-      // Draw atmospheric effects last
-      systems.current.atmosphere?.draw(ctx, time);
-  };
+        ctx: CanvasRenderingContext2D, 
+        time: number, 
+        deltaTime: number, 
+        lighting: any
+    ) => {
+        const terrain = systems.current.terrain;
+        if (!terrain) return;
+
+        // Update terrain system
+        terrain.update(time, deltaTime);
+
+        // Draw terrain with lighting
+        terrain.draw(ctx, time, lighting);
+    };
 
     const cleanup = useCallback(() => {
         // Cleanup system resources if needed

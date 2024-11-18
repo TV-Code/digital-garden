@@ -19,6 +19,7 @@ interface Systems {
 }
 
 
+
 export const useSanctuary = () => {
     const systems = useRef<Systems>({
         lighting: null,
@@ -36,7 +37,7 @@ export const useSanctuary = () => {
     const initializeSystems = useCallback((canvas: HTMLCanvasElement) => {
         const { width, height } = canvas;
         const waterLevel = height * 0.55;
-        
+
         const terrainOptions = {
             resolution: 100,
             octaves: 6,
@@ -56,8 +57,6 @@ export const useSanctuary = () => {
             vegetation: new VegetationSystem(width, height, waterLevel),
             mountains: generateMountainRanges(width, height)
         };
-
-        systems.current.terrain.initializeComposition();
     }, []);
 
     const generateMountainRanges = (width: number, height: number): MountainRange[] => {
@@ -98,8 +97,7 @@ export const useSanctuary = () => {
     // Draw water system with reflections
     drawWaterSystem(ctx, timeRef.current);
 
-    // Update and draw terrain
-    updateAndDrawTerrain(ctx, timeRef.current, deltaTime, currentLighting);
+    updateAndDrawTerrain(ctx, time, deltaTime, currentLighting)
 
     // Update and draw vegetation
     if (systems.current.vegetation) {
@@ -212,7 +210,7 @@ export const useSanctuary = () => {
         terrain.update(time, deltaTime);
 
         // Draw terrain with lighting
-        terrain.draw(ctx, time, lighting);
+        terrain.drawTerrain(ctx, time, lighting);
     };
 
     const cleanup = useCallback(() => {

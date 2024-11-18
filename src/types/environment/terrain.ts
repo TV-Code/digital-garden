@@ -1,46 +1,76 @@
-import { Vector2 } from '../index';
+export * from './terrain.types';
+export * from './features.types';
 
-export type TerrainFeatureType = 'mountain' | 'cliff' | 'plateau' | 'valley' | 'shoreline';
-export type FeatureType = 'ridge' | 'outcrop' | 'slope' | 'depression' | 'ledge';
+import { HSLColor } from '../../utils/colors';
+
+export interface Vector2 {
+    x: number;
+    y: number;
+}
+
+export type TerrainType = 'mountain' | 'valley' | 'plateau' | 'coastal' | 'riverbank';
 
 export interface TerrainLayer {
+    path: Path2D;
     points: Vector2[];
     elevation: number;
-    type: TerrainFeatureType;
+    type: TerrainType;
     features: TerrainFeature[];
-    path: Path2D;
+    vegetationZones: VegetationZone[];
 }
 
 export interface TerrainFeature {
-    type: FeatureType;
+    path: Path2D;
     points: Vector2[];
+    type: 'ridge' | 'valley' | 'plateau' | 'cliff' | 'slope';
     position: Vector2;
     size: number;
     elevation: number;
+    rockFormations: RockFormation[];
+    erosionPatterns: ErosionPattern[];
+}
+
+export interface RockFormation {
     path: Path2D;
-    detail: FeatureDetail;
+    detail: {
+        cracks: Path2D[];
+        texture: Path2D;
+        weathering: Path2D[];
+    };
+    color: HSLColor;
+    position: Vector2;
+    size: number;
+    age: number;
 }
 
-export interface FeatureDetail {
-    roughness: number;
-    erosion: number;
+export interface ErosionPattern {
+    paths: Path2D[];
+    depth: number;
+    type: 'water' | 'wind' | 'geological';
+    age: number;
+    activity: number;
+}
+
+export interface VegetationZone {
+    bounds: Path2D;
+    position: Vector2;
     moisture: number;
-    vegetation: number;
+    slope: number;
+    soilType: 'rocky' | 'fertile' | 'sandy';
+    vegetationDensity: number;
 }
 
-export interface TerrainSystemConfig {
-    width: number;
-    height: number;
-    waterLevel: number;
-    params?: Partial<typeof TERRAIN_PARAMS>;
+export interface TerrainParams {
+    mountainHeight: number;
+    valleyDepth: number;
+    cliffSteepness: number;
+    erosionStrength: number;
+    vegetationDensity: number;
 }
 
 export interface TerrainSystemOptions {
-    resolution?: number;
-    octaves?: number;
-    persistence?: number;
-    lacunarity?: number;
-    baseFrequency?: number;
-    erosionStrength?: number;
-    smoothingPasses?: number;
+    width: number;
+    height: number;
+    waterLevel: number;
+    params?: Partial<TerrainParams>;
 }
